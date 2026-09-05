@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GymStatistics · 局域网查看</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f4f6fb; color: #1c1e21; line-height: 1.5;
+  }
+  header {
+    background: #1e88e5; color: #fff; padding: 18px 20px;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header .sub { opacity: .9; font-size: 13px; margin-top: 4px; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .card {
+    background: #fff; border: 1px solid #e2e6ef; border-radius: 12px; padding: 14px 16px; flex: 1 1 160px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .card .num { font-size: 26px; font-weight: 700; color: #1e88e5; }
+  .card .lbl { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .actions { display: flex; gap: 10px; margin: 6px 0 18px; flex-wrap: wrap; }
+  .actions a, .actions button {
+    display: inline-block; text-decoration: none; border: none; cursor: pointer;
+    padding: 9px 16px; border-radius: 8px; font-size: 14px; background: #fff;
+    border: 1px solid #d6dbe6; color: #1e88e5; font-weight: 600;
+  }
+  .actions a:hover, .actions button:hover { background: #eef3ff; }
+  section.day {
+    background: #fff; border: 1px solid #e2e6ef; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+  }
+  section.day h2 { margin: 0 0 10px; font-size: 17px; }
+  section.day .note { color: #6b7280; font-size: 13px; margin-bottom: 8px; }
+  .ex { margin-bottom: 12px; }
+  .ex .name { font-weight: 700; margin-bottom: 4px; }
+  .ex .sets { font-size: 14px; color: #374151; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eef1f6; }
+  th { color: #6b7280; font-weight: 600; font-size: 12px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .empty { text-align: center; color: #8a93a5; padding: 40px 0; }
+  .footer { text-align: center; color: #8a93a5; font-size: 12px; margin: 20px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏋️ GymStatistics</h1>
+  <div class="sub" id="exported"></div>
+</header>
+<div class="wrap">
+  <div class="actions">
+    <button id="dlJson">⬇ 导出 JSON</button>
+    <button id="dlCsv">⬇ 导出 CSV</button>
+    <button id="refreshBtn">↻ 刷新</button>
+  </div>
+
+  <div class="stats">
+    <div class="card"><div class="num" id="nSessions">0</div><div class="lbl">训练天数</div></div>
+    <div class="card"><div class="num" id="nExercises">0</div><div class="lbl">动作数</div></div>
+    <div class="card"><div class="num" id="nSets">0</div><div class="lbl">总组数</div></div>
+    <div class="card"><div class="num" id="totalCount">0</div><div class="lbl">总次数</div></div>
+  </div>
+
+  <div id="content"></div>
+  <div class="footer">数据来源:你的手机 · GymStatistics 局域网同步</div>
+</div>
+<script>
+  const fmtW = (w) => (w == null ? "-" : String(w));
+  const fmtR = (r) => (r == null ? "-" : String(r));
+  const fmtDate = (d) => {
+    if (!d) return d;
+    const parts = d.split("-");
+    if (parts.length === 3) return `${parts[0]}-${parts[1]}-${parts[2]}`;
+    return d;
+  };
+
+  async function load() {
+    try {
+      const res = await fetch("api/workouts");
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      const sessions = (data.sessions || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+      document.getElementById("exported").textContent =
+        "同步自手机  ·  " + (data.exportedAt || "刚刚") + "  ·  每 5 秒自动刷新";
+
+      // stats
+      let nEx = 0, nSets = 0, nCount = 0;
+      for (const s of sessions) {
+        for (const e of s.exercises || []) {
+          nEx += 1;
+          if (e.sets) nSets += e.sets;
+          if (e.count) nCount += e.count;
+        }
+      }
+      document.getElementById("nSessions").textContent = sessions.length;
+      document.getElementById("nExercises").textContent = nEx;
+      document.getElementById("nSets").textContent = nSets;
+      document.getElementById("totalCount").textContent = nCount;
+
+      // list
+      const host = document.getElementById("content");
+      host.innerHTML = "";
+      if (sessions.length === 0) {
+        host.innerHTML = '<div class="empty">暂无训练记录</div>';
+        return;
+      }
+      for (const s of sessions) {
+        const sec = document.createElement("section");
+        sec.className = "day";
+        const h = document.createElement("h2");
+        h.textContent = "📅 " + fmtDate(s.date);
+        sec.appendChild(h);
+        if (s.note && s.note.trim()) {
+          const n = document.createElement("div");
+          n.className = "note";
+          n.textContent = "备注: " + s.note;
+          sec.appendChild(n);
+        }
+        (s.exercises || []).forEach((e) => {
+          const box = document.createElement("div");
+          box.className = "ex";
+          const nm = document.createElement("div");
+          nm.className = "name";
+          nm.textContent = e.name;
+          box.appendChild(nm);
+          const data = (e.data != null ? String(e.data) : "") + (e.unit || "");
+          const line = [];
+          if (data) line.push(data);
+          if (e.count != null) line.push((e.sets == null || e.sets <= 1) ? `${e.count}个` : `${e.count} × ${e.sets}组`);
+          const sd = document.createElement("div");
+          sd.className = "sets";
+          sd.textContent = line.join(" · ");
+          box.appendChild(sd);
+          sec.appendChild(box);
+        });
+        host.appendChild(sec);
+      }
+    } catch (err) {
+      document.getElementById("content").innerHTML =
+        '<div class="empty">无法获取数据: ' + escapeHtml(String(err)) + "</div>";
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Download an export with a timestamped filename (e.g. gymstatistics_20260905-171234.csv).
+  function downloadExport(path, base, ext) {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    const name = `${base}_${stamp}.${ext}`;
+    fetch(path)
+      .then((r) => r.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })
+      .catch(() => {});
+  }
+
+  document.getElementById("dlJson").addEventListener("click", () => downloadExport("api/export.json", "gymstatistics", "json"));
+  document.getElementById("dlCsv").addEventListener("click", () => downloadExport("api/export.csv", "gymstatistics", "csv"));
+  document.getElementById("refreshBtn").addEventListener("click", load);
+  load();
+  setInterval(load, 5000);
+</script>
+</body>
+</html>
