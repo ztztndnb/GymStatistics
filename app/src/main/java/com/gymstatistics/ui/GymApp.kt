@@ -1,8 +1,10 @@
 package com.gymstatistics.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -102,6 +106,7 @@ fun GymApp(viewModel: GymViewModel) {
     var prefillExercise by remember { mutableStateOf<ExerciseRecord?>(null) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
     var showSync by remember { mutableStateOf(false) }
+    var dragAccum by remember { mutableFloatStateOf(0f) }
 
     if (showSync) {
         SyncPage(viewModel = viewModel, onBack = { showSync = false })
@@ -145,7 +150,21 @@ fun GymApp(viewModel: GymViewModel) {
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragAccum = 0f },
+                        onDragEnd = {
+                            if (dragAccum < -100f) selectedDate = selectedDate.plusDays(1)     // 左滑 → 下一天
+                            else if (dragAccum > 100f) selectedDate = selectedDate.minusDays(1) // 右滑 → 上一天
+                            dragAccum = 0f
+                        },
+                    ) { _, amount -> dragAccum += amount }
+                },
+        ) {
             DatePickerHeader(
                 selectedDate = selectedDate,
                 onOpenCalendar = { showCalendar = true },
@@ -476,6 +495,8 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(state.syncUrl) { copied = false }
 
+    BackHandler { onBack() }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -715,6 +736,8 @@ private fun HistoryScreen(
     var selectedName by remember(initial) { mutableStateOf(initial) }
     val selected = actions.firstOrNull { it.name == selectedName }
     val today = LocalDate.now()
+
+    BackHandler { if (selected != null) selectedName = null else onBack() }
 
     Scaffold(
         topBar = {
