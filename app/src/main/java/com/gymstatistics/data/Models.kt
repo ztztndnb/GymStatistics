@@ -41,3 +41,35 @@ data class SyncPayload(
     val exportedAt: String,
     val sessions: List<SessionRecord>,
 )
+
+/** How an import is scoped. */
+sealed interface ImportMode {
+    data object ALL : ImportMode
+    data class DATE(val date: String) : ImportMode
+}
+
+/** Result of an import. */
+data class ImportResult(
+    val added: Int = 0,
+    val duplicates: Int = 0,
+    val skipped: Int = 0,
+    val overwritten: Int = 0,
+)
+
+/** Body of a POST /api/import request. */
+@Serializable
+data class ImportRequest(
+    val mode: String = "all",            // "all" | "date"
+    val date: String? = null,
+    val overwriteDuplicates: Boolean = false,
+    val sessions: List<SessionRecord> = emptyList(),
+)
+
+/** Response of a POST /api/import. */
+@Serializable
+data class ImportResponse(
+    val added: Int = 0,
+    val duplicates: Int = 0,
+    val skipped: Int = 0,
+    val overwritten: Int = 0,
+)

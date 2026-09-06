@@ -1,6 +1,8 @@
 package com.gymstatistics.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -72,6 +74,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
@@ -84,9 +87,13 @@ import androidx.compose.ui.unit.sp
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionSummary
+import com.gymstatistics.data.AppJson
 import com.gymstatistics.data.ChartSeries
 import com.gymstatistics.data.ExerciseRecord
 import com.gymstatistics.data.FATIGUE_WINDOW_DAYS
+import com.gymstatistics.data.ImportMode
+import com.gymstatistics.data.SessionRecord
+import com.gymstatistics.data.SyncPayload
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
@@ -473,8 +480,30 @@ private fun MonthCalendarDialog(
 private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
     val state = viewModel.uiState
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(state.syncUrl) { copied = false }
+
+    // import flow state
+    var pendingImport by remember { mutableStateOf<List<SessionRecord>?>(null) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importMode by remember { mutableStateOf<ImportMode>(ImportMode.ALL) }
+    var importDate by remember { mutableStateOf(LocalDate.now().toString()) }
+    var showDupDialog by remember { mutableStateOf(false) }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val json = try {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+            } catch (e: Exception) { "" }
+            val parsed = parseImportSessions(json)
+            if (parsed.isNotEmpty()) {
+                pendingImport = parsed
+                importMode = ImportMode.ALL
+                importDate = LocalDate.now().toString()
+                showImportDialog = true
+            }
+        }
+    }
 
     BackHandler { onBack() }
 
@@ -540,6 +569,103 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
+
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = { filePicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+                Text("从电脑导入数据(选文件)")
+            }
+        }
+    }
+
+    if (showImportDialog) {
+        ImportDialog(
+            sessions = pendingImport ?: emptyList(),
+            mode = importMode,
+            onModeChange = { importMode = it },
+            date = importDate,
+            onDateChange = { importDate = it },
+            onDismiss = { showImportDialog = false; pendingImport = null },
+            onImport = {
+                val dup = viewModel.importPreview(pendingImport ?: emptyList(), importMode)
+                if (dup > 0) { showImportDialog = false; showDupDialog = true }
+                else { viewModel.importSessions(pendingImport ?: emptyList(), importMode, false); showImportDialog = false; pendingImport = null }
+            },
+        )
+    }
+
+    if (showDupDialog) {
+        AlertDialog(
+            onDismissRequest = { showDupDialog = false; pendingImport = null },
+            title = { Text("检测到重复") },
+            text = { Text("导入内容中有日期已存在数据,如何处理?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.importSessions(pendingImport ?: emptyList(), importMode, true); showDupDialog = false; pendingImport = null }) { Text("合并(覆盖)") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.importSessions(pendingImport ?: emptyList(), importMode, false); showDupDialog = false; pendingImport = null }) { Text("跳过重复") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ImportDialog(
+    sessions: List<SessionRecord>,
+    mode: ImportMode,
+    onModeChange: (ImportMode) -> Unit,
+    date: String,
+    onDateChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onImport: () -> Unit,
+) {
+    val dates = sessions.map { it.date }.distinct()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入数据") },
+        text = {
+            Column {
+                Text("文件含 ${dates.size} 个日期 / ${sessions.size} 条记录", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { onModeChange(ImportMode.ALL) }, modifier = Modifier.weight(1f)) {
+                        Text("全部导入", fontWeight = if (mode is ImportMode.ALL) FontWeight.Bold else FontWeight.Normal)
+                    }
+                    OutlinedButton(onClick = { onModeChange(ImportMode.DATE(date)) }, modifier = Modifier.weight(1f)) {
+                        Text("按日期导入", fontWeight = if (mode is ImportMode.DATE) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+                if (mode is ImportMode.DATE) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = onDateChange,
+                        label = { Text("导入日期 (YYYY-MM-DD)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onModeChange(if (mode is ImportMode.ALL) ImportMode.ALL else ImportMode.DATE(date))
+                onImport()
+            }) { Text("开始导入") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/** Parse an exported JSON (WorkoutData or SyncPayload) into sessions. */
+private fun parseImportSessions(json: String): List<SessionRecord> {
+    if (json.isBlank()) return emptyList()
+    return try {
+        AppJson.json.decodeFromString(WorkoutData.serializer(), json).sessions
+    } catch (e: Exception) {
+        try {
+            AppJson.json.decodeFromString(SyncPayload.serializer(), json).sessions
+        } catch (e2: Exception) {
+            emptyList()
         }
     }
 }

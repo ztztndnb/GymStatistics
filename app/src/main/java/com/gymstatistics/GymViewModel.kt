@@ -8,6 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gymstatistics.data.ExerciseRecord
+import com.gymstatistics.data.ImportMode
+import com.gymstatistics.data.ImportResult
 import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.WorkoutRepository
@@ -159,12 +161,55 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         persist(current.copy(suppressedFatigue = newSet))
     }
 
+    /** Import sessions from an external source (a file or a PC POST), handling duplicates. */
+    fun importSessions(incoming: List<SessionRecord>, mode: ImportMode, overwriteDuplicates: Boolean): ImportResult {
+        val current = uiState.data
+        val sessions = current.sessions.toMutableList()
+        var added = 0; var duplicates = 0; var skipped = 0; var overwritten = 0
+        val incomingByDate = incoming.filter { sessionMatchesMode(it, mode) }.groupBy { it.date }
+        for ((date, inc) in incomingByDate) {
+            val idx = sessions.indexOfFirst { it.date == date }
+            if (idx >= 0) {
+                duplicates += inc.size
+                if (overwriteDuplicates) {
+                    val existing = sessions[idx]
+                    sessions[idx] = existing.copy(exercises = existing.exercises + inc.flatMap { it.exercises })
+                    overwritten += inc.size
+                } else {
+                    skipped += inc.size
+                }
+            } else {
+                sessions.addAll(inc)
+                added += inc.size
+            }
+        }
+        val newData = current.copy(sessions = sessions)
+        persist(newData)
+        uiState = uiState.copy(message = "已导入:新增 $added 条,重复 $duplicates 条(跳过 $skipped/合并 $overwritten)")
+        return ImportResult(added, duplicates, skipped, overwritten)
+    }
+
+    /** Number of incoming dates that already exist on the phone (drives the duplicate prompt). */
+    fun importPreview(incoming: List<SessionRecord>, mode: ImportMode): Int {
+        val incomingDates = incoming.filter { sessionMatchesMode(it, mode) }.map { it.date }.toSet()
+        val existing = uiState.data.sessions.map { it.date }.toSet()
+        return incomingDates.count { it in existing }
+    }
+
+    private fun sessionMatchesMode(s: SessionRecord, mode: ImportMode): Boolean =
+        when (mode) {
+            is ImportMode.ALL -> true
+            is ImportMode.DATE -> s.date == mode.date
+        }
+
     fun setSync(enabled: Boolean) {
         if (enabled) {
             if (server == null) {
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        val s = LanSyncServer(getApplication(), SYNC_PORT) { uiState.data }
+                        val s = LanSyncServer(getApplication(), SYNC_PORT, { uiState.data }) { incoming, mode, overwrite ->
+                            importSessions(incoming, mode, overwrite)
+                        }
                         s.start(500, false)
                         server = s
                         uiState = uiState.copy(

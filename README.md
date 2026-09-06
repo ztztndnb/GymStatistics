@@ -14,6 +14,7 @@
 - **离线优先**:数据以 JSON 保存在手机本地,健身房没网也能正常记录。
 - **局域网同步**:底部“局域网同步”按钮进入独立页面,可**开关同步**、显示局域网链接、并**一键复制链接**;手机作为数据源,内嵌 HTTP 服务,同一 WiFi/局域网下的电脑浏览器即可实时查看数据,并可导出 JSON / CSV。导出的 CSV 为 **UTF-8(含 BOM)** 编码以兼容 Excel 中文;导出文件名带时间戳(如 `gymstatistics_20260905-132249.csv`)。
 - **手机为权威来源**:单一数据源,结构简单、无冲突。
+- **从电脑导入数据**:在“局域网同步”页点“从电脑导入数据(选文件)”,选择导出的 JSON 文件,可**全部导入**或**按日期导入**;若导入日期与现有数据重复,**会提示用户**选择“合并(覆盖)”或“跳过重复”。同时服务端提供 `POST /api/import`(body 为 `{"mode":"all|date","date":"...","overwriteDuplicates":bool,"sessions":[...]}`),电脑可经局域网回传数据,并返回 `{added,duplicates,skipped,overwritten}`。
 - **记录动作/同步按钮**:主页面底部垂直排列“记录动作”与“局域网同步”两个按钮,不再使用右下角悬浮按钮;原有的局域网同步开关卡片已移除,统一到同步页管理。
 - **系统返回走返回键/侧滑**:在“历史动作”列表、“具体动作详情”以及“局域网同步”页面按系统返回(或手势侧滑)会**返回上一级**(历史详情→历史列表→主界面;同步页→主界面),不再是直接退出应用。
 
@@ -37,12 +38,12 @@
 
 APK 输出:
 - 调试版:`app\build\outputs\apk\debug\app-debug.apk`
-- 正式版:`app\build\outputs\apk\release\app-release.apk`(已签名,versionName `1.0.0`)
+- 正式版:`app\build\outputs\apk\release\app-release.apk`(已签名,versionName `1.0.1`)
 
 > 注:本仓库的 `local.properties` 指向本机 SDK,`build/`、`.gradle/`、`keystore.properties`、`keystore/` 等已被 `.gitignore` 忽略。
 
 ## 正式版发布信息
-- 当前版本:**1.0.0**(`versionCode=1`,`versionName="1.0.0"`)。
+- 当前版本:**1.0.1**(`versionCode=2`,`versionName="1.0.1"`)。
 - Release 构建启用 **R8 压缩 + 资源收缩**,并保留 `kotlinx.serialization` 序列化器与 `NanoHTTPD` 的混淆规则,release 包约 1.2MB。
 - 签名:release 使用根目录 `keystore.properties` 指向的 `keystore/gymstatistics-release.jks`(alias `gymstatistics`)。该文件已被 gitignore,不进入版本库。
 - ⚠️ 该密钥库为本地生成的示例,口令较弱且已出现在本会话命令中;**若要用于应用商店正式上架,请换用你自己生成、妥善保管的强口令密钥库**,且务必备份好——丢失将无法对后续版本用同一签名更新。

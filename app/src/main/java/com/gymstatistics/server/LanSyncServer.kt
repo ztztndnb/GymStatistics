@@ -2,6 +2,11 @@ package com.gymstatistics.server
 
 import android.content.Context
 import com.gymstatistics.data.AppJson
+import com.gymstatistics.data.ImportMode
+import com.gymstatistics.data.ImportRequest
+import com.gymstatistics.data.ImportResponse
+import com.gymstatistics.data.ImportResult
+import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.SyncPayload
 import com.gymstatistics.data.WorkoutData
 import fi.iki.elonen.NanoHTTPD
@@ -13,13 +18,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Embedded HTTP server that lets a computer on the same LAN view and export
- * the workout data in its browser. The phone remains the source of truth.
+ * Embedded HTTP server that lets a computer on the same LAN view/export, and
+ * import data back into the phone. The phone remains the source of truth.
  */
 class LanSyncServer(
     context: Context,
     private val port: Int,
     private val dataProvider: () -> WorkoutData,
+    private val importHandler: (List<SessionRecord>, ImportMode, Boolean) -> ImportResult,
 ) : NanoHTTPD("0.0.0.0", port) {
 
     private val dashboardHtml: String = try {
@@ -57,8 +63,27 @@ class LanSyncServer(
             "/api/export.csv" ->
                 respond(Status.OK, "text/csv; charset=utf-8", "\uFEFF" + buildCsv(dataProvider()), attachmentName("csv"))
 
+            "/api/import" ->
+                serveImport(session)
+
             else ->
                 respond(Status.NOT_FOUND, "text/plain", "Not found")
+        }
+    }
+
+    private fun serveImport(session: IHTTPSession): Response {
+        return try {
+            val map = HashMap<String, String>()
+            session.parseBody(map)
+            val body = map["postData"] ?: ""
+            if (body.isBlank()) return respond(Status.BAD_REQUEST, "application/json; charset=utf-8", """{"error":"empty body"}""")
+            val req = AppJson.json.decodeFromString(ImportRequest.serializer(), body)
+            val mode = if (req.mode == "date" && req.date != null) ImportMode.DATE(req.date) else ImportMode.ALL
+            val r = importHandler(req.sessions, mode, req.overwriteDuplicates)
+            val resp = ImportResponse(r.added, r.duplicates, r.skipped, r.overwritten)
+            respond(Status.OK, "application/json; charset=utf-8", AppJson.json.encodeToString(ImportResponse.serializer(), resp))
+        } catch (e: Exception) {
+            respond(Status.BAD_REQUEST, "application/json; charset=utf-8", """{"error":"${e.message ?: "bad request"}"}""")
         }
     }
 
