@@ -31,6 +31,8 @@ data class SessionRecord(
 data class WorkoutData(
     val version: Int = 1,
     val sessions: List<SessionRecord> = emptyList(),
+    /** Actions whose fatigue warning has been turned off. */
+    val suppressedFatigue: Set<String> = emptySet(),
 )
 
 /** Payload served by the embedded sync server for the PC dashboard. */

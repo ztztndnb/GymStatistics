@@ -152,6 +152,13 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         uiState = uiState.copy(message = null)
     }
 
+    /** Turn the fatigue warning for this action on/off (persisted). */
+    fun setFatigueSuppressed(name: String, suppressed: Boolean) {
+        val current = uiState.data
+        val newSet = if (suppressed) current.suppressedFatigue + name else current.suppressedFatigue - name
+        persist(current.copy(suppressedFatigue = newSet))
+    }
+
     fun setSync(enabled: Boolean) {
         if (enabled) {
             if (server == null) {
@@ -191,22 +198,41 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     private fun demoData(): WorkoutData {
         val d = { offset: Long -> java.time.LocalDate.now().minusDays(offset).toString() }
         fun uid() = UUID.randomUUID().toString()
-        fun sess(date: String, note: String, vararg ex: ExerciseRecord) =
-            SessionRecord(id = uid(), date = date, note = note, exercises = ex.toList())
 
-        return WorkoutData(
-            sessions = listOf(
-                sess(d(0), "", ExerciseRecord("卧推", uid(), 70.0, "kg", 8, 4), ExerciseRecord("引体向上", uid(), null, "", 10, 2)),
-                sess(d(1), "上肢日", ExerciseRecord("卧推", uid(), 72.5, "kg", 8, 3), ExerciseRecord("肩推", uid(), 40.0, "kg", 10, 3)),
-                sess(d(2), "", ExerciseRecord("深蹲", uid(), 85.0, "kg", 8, 4), ExerciseRecord("硬拉", uid(), 110.0, "kg", 5, 3)),
-                sess(d(3), "演示数据", ExerciseRecord("卧推", uid(), 65.0, "kg", 10, 3), ExerciseRecord("卧推", uid(), 135.0, "lbs", 10, 3), ExerciseRecord("深蹲", uid(), 80.0, "kg", 8, 3)),
-                sess(d(4), "", ExerciseRecord("引体向上", uid(), null, "", 8, 3)),
-                sess(d(5), "推日", ExerciseRecord("卧推", uid(), 60.0, "kg", 10, 3), ExerciseRecord("肩推", uid(), 35.0, "kg", 12, 3)),
-                sess(d(6), "", ExerciseRecord("深蹲", uid(), 75.0, "kg", 10, 3)),
-                sess(d(8), "", ExerciseRecord("卧推", uid(), 160.0, "lbs", 8, 3), ExerciseRecord("硬拉", uid(), 105.0, "kg", 6, 3)),
-                sess(d(10), "", ExerciseRecord("引体向上", uid(), null, "", 12, 2), ExerciseRecord("卧推", uid(), 55.0, "kg", 12, 3)),
-            ),
-        )
+        // 6 trend actions spanning ~30 days, two groups of 3.
+        val offsets = listOf(0L, 2L, 4L, 6L, 8L, 10L, 12L, 14L, 16L, 18L, 20L, 22L, 24L, 26L, 28L)
+        // Group 1: data varies, count stays 8.
+        val dataWave = listOf(60.0, 65.0, 62.0, 68.0, 63.0, 72.0, 66.0, 70.0, 64.0, 74.0, 68.0, 71.0, 63.0, 69.0, 67.0) // 上下起伏
+        val dataDesc = listOf(85.0, 84.0, 82.0, 80.0, 78.0, 76.0, 74.0, 72.0, 70.0, 68.0, 66.0, 64.0, 62.0, 60.0, 58.0) // 逐渐下降
+        val dataAsc = listOf(50.0, 51.0, 53.0, 54.0, 56.0, 58.0, 60.0, 62.0, 63.0, 65.0, 67.0, 69.0, 70.0, 72.0, 73.0) // 逐渐上升
+        // Group 2: data stays 70, count varies.
+        val cntWave = listOf(8, 10, 9, 12, 10, 11, 13, 11, 12, 14, 12, 13, 11, 12, 10) // 上下起伏
+        val cntDesc = listOf(14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 2, 1)        // 逐渐下降
+        val cntAsc = listOf(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)     // 逐渐上升
+
+        val byDate = LinkedHashMap<String, MutableList<ExerciseRecord>>()
+        fun put(date: String, vararg ex: ExerciseRecord) {
+            byDate.getOrPut(date) { mutableListOf() }.addAll(ex)
+        }
+
+        offsets.forEachIndexed { i, off ->
+            put(
+                d(off),
+                ExerciseRecord("起伏数据", uid(), dataWave[i], "kg", 8, 3),
+                ExerciseRecord("渐降数据", uid(), dataDesc[i], "kg", 8, 3),
+                ExerciseRecord("渐升数据", uid(), dataAsc[i], "kg", 8, 3),
+                ExerciseRecord("恒定起伏", uid(), 70.0, "kg", cntWave[i], 3),
+                ExerciseRecord("恒定渐降", uid(), 70.0, "kg", cntDesc[i], 3),
+                ExerciseRecord("恒定渐升", uid(), 70.0, "kg", cntAsc[i], 3),
+            )
+        }
+        // 卧推 with two units (kg + lbs) on recent days, to show unit-split charts.
+        put(d(0), ExerciseRecord("卧推", uid(), 70.0, "kg", 8, 4), ExerciseRecord("卧推", uid(), 155.0, "lbs", 8, 3))
+        put(d(2), ExerciseRecord("卧推", uid(), 65.0, "kg", 10, 3), ExerciseRecord("卧推", uid(), 145.0, "lbs", 10, 3))
+        put(d(6), ExerciseRecord("卧推", uid(), 60.0, "kg", 12, 3), ExerciseRecord("卧推", uid(), 135.0, "lbs", 12, 2))
+
+        val sessions = byDate.map { (date, exs) -> SessionRecord(id = uid(), date = date, note = "", exercises = exs) }
+        return WorkoutData(sessions = sessions)
     }
 }
 

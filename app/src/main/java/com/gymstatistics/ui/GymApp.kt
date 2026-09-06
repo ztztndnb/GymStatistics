@@ -58,6 +58,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -73,13 +74,19 @@ import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionSummary
 import com.gymstatistics.data.ChartSeries
 import com.gymstatistics.data.ExerciseRecord
+import com.gymstatistics.data.FATIGUE_WINDOW_DAYS
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +112,7 @@ fun GymApp(viewModel: GymViewModel) {
         HistoryScreen(
             data = state.data,
             initial = historySelected,
+            onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
             onBack = { showHistory = false; historySelected = null },
             onPickFill = { name, record ->
                 prefillExercise = ExerciseRecord(
@@ -699,12 +707,14 @@ private fun ExerciseEditor(draft: ExerciseDraft) {
 private fun HistoryScreen(
     data: WorkoutData,
     initial: String?,
+    onSetFatigueSuppressed: (String, Boolean) -> Unit,
     onBack: () -> Unit,
     onPickFill: (name: String, record: ActionRecord) -> Unit,
 ) {
     val actions = remember(data) { buildActions(data.sessions) }
     var selectedName by remember(initial) { mutableStateOf(initial) }
     val selected = actions.firstOrNull { it.name == selectedName }
+    val today = LocalDate.now()
 
     Scaffold(
         topBar = {
@@ -726,7 +736,11 @@ private fun HistoryScreen(
             } else {
                 LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
                     items(actions, key = { it.name }) { a ->
-                        ActionRow(a = a, onClick = { selectedName = a.name })
+                        ActionRow(
+                            a = a,
+                            fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
+                            onClick = { selectedName = a.name },
+                        )
                     }
                 }
             }
@@ -743,6 +757,36 @@ private fun HistoryScreen(
                     color = MaterialTheme.colorScheme.outline,
                     fontSize = 13.sp,
                 )
+
+                // fatigue warning toggle (can be turned off per action)
+                val suppressed = data.suppressedFatigue.contains(selected.name)
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("疲劳预警", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (suppressed) "已关闭" else "三天内做过将在列表中显示黄色警示",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        Switch(
+                            checked = !suppressed,
+                            onCheckedChange = { onSetFatigueSuppressed(selected.name, !it) },
+                        )
+                    }
+                }
+                if (!suppressed) {
+                    fatigueInfoOf(selected, today, emptySet())?.let { info ->
+                        Text(
+                            info,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                            fontSize = 12.sp,
+                            color = Color(0xFFB26A00),
+                        )
+                    }
+                }
+
                 selected.records.forEach { r ->
                     Card(
                         modifier = Modifier
@@ -761,22 +805,44 @@ private fun HistoryScreen(
                         }
                     }
                 }
+
                 Spacer(Modifier.height(16.dp))
-                TrendChart("数据趋势(按单位)", buildSeriesByData(selected))
-                TrendChart("总个数趋势(按单位)", buildSeriesByTotalCount(selected))
+                // Charts split by unit (one chart per unit).
+                buildSeriesByData(selected).forEach { s ->
+                    TrendChart("数据趋势(${s.label})", listOf(s), yAxisLabel = s.label)
+                }
+                buildSeriesByTotalCount(selected).forEach { s ->
+                    TrendChart("总个数趋势(${s.label})", listOf(s), yAxisLabel = "个")
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
+/** Returns the fatigue warning text if the action was done within [FATIGUE_WINDOW_DAYS], else null. */
+private fun fatigueInfoOf(a: ActionSummary, today: LocalDate, suppressed: Set<String>): String? {
+    if (a.name in suppressed) return null
+    val last = a.lastDate ?: return null
+    val days = try { ChronoUnit.DAYS.between(LocalDate.parse(last), today).toInt() } catch (e: Exception) { return null }
+    if (days < 0 || days > FATIGUE_WINDOW_DAYS) return null
+    val whenTxt = if (days <= 0) "今天" else "${days}天前"
+    return "上次 ${shortDate(last)} · $whenTxt 做过"
+}
+
 @Composable
-private fun ActionRow(a: ActionSummary, onClick: () -> Unit) {
+private fun ActionRow(a: ActionSummary, fatigueInfo: String?, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable(onClick = onClick)) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(a.name, style = MaterialTheme.typography.titleMedium)
                 Text("${a.addedCount} 次", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+            if (fatigueInfo != null) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("⚠ 疲劳预警", color = Color(0xFFB26A00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(fatigueInfo, color = Color(0xFFB26A00), fontSize = 10.sp)
+                }
             }
         }
     }
@@ -801,7 +867,7 @@ private val chartColors = listOf(
 )
 
 @Composable
-private fun TrendChart(title: String, series: List<ChartSeries>) {
+private fun TrendChart(title: String, series: List<ChartSeries>, yAxisLabel: String) {
     val nonEmpty = series.filter { it.points.isNotEmpty() }
     val textMeasurer = rememberTextMeasurer()
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -811,47 +877,88 @@ private fun TrendChart(title: String, series: List<ChartSeries>) {
             if (nonEmpty.isEmpty()) {
                 Text("暂无数据", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             } else {
-                Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
-                    val labelH = 20.dp.toPx()
-                    val chartH = size.height - labelH
-                    val labelStyle = TextStyle(fontSize = 10.sp, color = Color(0xFF9AA2B1))
-                    val allDates = nonEmpty.flatMap { it.points.map { p -> p.first } }.distinct().sorted()
-                    val dateIndex = allDates.mapIndexed { i, d -> d to i }.toMap()
-                    val allY = nonEmpty.flatMap { it.points.map { p -> p.second } }
-                    val yMin = allY.minOrNull()!!
-                    val yMax = allY.maxOrNull()!!
-                    val ySpan = (yMax - yMin).takeIf { it > 0 } ?: 1.0
-                    fun xOf(date: String): Float {
-                        val idx = dateIndex[date] ?: 0
-                        return if (allDates.size <= 1) size.width / 2f
-                        else size.width * idx / (allDates.size - 1).toFloat()
-                    }
-                    fun yOf(v: Double): Float = (chartH * (1.0 - (v - yMin) / ySpan)).toFloat()
+                    Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+                        val labelH = 20.dp.toPx()
+                        val chartH = size.height - labelH
+                        val axisStyle = TextStyle(fontSize = 10.sp, color = Color(0xFF9AA2B1))
+                        val gridColor = Color(0xFFE9EDF4)
+                        val allDates = nonEmpty.flatMap { it.points.map { p -> p.first } }.distinct().sorted()
+                        val dateIndex = allDates.mapIndexed { i, d -> d to i }.toMap()
+                        val allY = nonEmpty.flatMap { it.points.map { p -> p.second } }
+                        val yMin = allY.minOrNull()!!
+                        val yMax = allY.maxOrNull()!!
+                        val ySpan = (yMax - yMin).takeIf { it > 0 } ?: 1.0
 
-                    nonEmpty.forEachIndexed { si, s ->
-                        val color = chartColors[si % chartColors.size]
-                        val path = Path()
-                        s.points.forEachIndexed { i, p ->
-                            val x = xOf(p.first)
-                            val y = yOf(p.second)
-                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        // nice y-axis ticks
+                        val rawStep = ySpan / 4.0
+                        val mag = 10.0.pow(floor(log10(rawStep)))
+                        val norm = rawStep / mag
+                        val step = when {
+                            norm <= 1 -> mag
+                            norm <= 2 -> mag * 2
+                            norm <= 5 -> mag * 5
+                            else -> mag * 10
                         }
-                        drawPath(path = path, color = color, style = Stroke(width = 3f))
-                        s.points.forEach { p ->
-                            drawCircle(color = color, radius = 4f, center = Offset(xOf(p.first), yOf(p.second)))
+                        val start = floor(yMin / step) * step
+                        val ticks = mutableListOf<Double>()
+                        var tv = start
+                        while (tv <= yMax + step / 1e6 && ticks.size <= 6) {
+                            ticks.add(tv)
+                            tv += step
+                        }
+                        val tickMeasured = ticks.map { textMeasurer.measure(fmtTick(it), axisStyle) }
+                        val maxTickW = (tickMeasured.maxOfOrNull { it.size.width } ?: 0).toFloat()
+
+                        val unitBand = 24.dp.toPx()
+                        val plotLeft = unitBand + maxTickW + 6f
+                        val innerW = size.width - plotLeft
+
+                        fun xOf(date: String): Float {
+                            val idx = dateIndex[date] ?: 0
+                            return if (allDates.size <= 1) plotLeft + innerW / 2f
+                            else plotLeft + innerW * idx / (allDates.size - 1).toFloat()
+                        }
+                        fun yOf(v: Double): Float = (chartH * (1.0 - (v - yMin) / ySpan)).toFloat()
+
+                        // unit label (horizontal, centered over the y-axis number band, at top)
+                        val unitStyle = TextStyle(fontSize = 11.sp, color = Color(0xFF9AA2B1))
+                        val um = textMeasurer.measure(yAxisLabel, unitStyle)
+                        drawText(um, topLeft = Offset((unitBand + plotLeft) / 2f - um.size.width / 2f, 2f))
+
+                        // horizontal grid lines + y-axis numbers
+                        ticks.forEachIndexed { i, v ->
+                            val y = yOf(v)
+                            drawLine(color = gridColor, start = Offset(plotLeft, y), end = Offset(size.width, y), strokeWidth = 1f)
+                            val m = tickMeasured[i]
+                            val nx = (plotLeft - m.size.width - 4f).coerceAtLeast(unitBand)
+                            drawText(m, topLeft = Offset(nx, y - m.size.height / 2f))
+                        }
+
+                        nonEmpty.forEachIndexed { si, s ->
+                            val color = chartColors[si % chartColors.size]
+                            val path = Path()
+                            s.points.forEachIndexed { i, p ->
+                                val x = xOf(p.first)
+                                val y = yOf(p.second)
+                                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            }
+                            drawPath(path = path, color = color, style = Stroke(width = 3f))
+                            s.points.forEach { p ->
+                                drawCircle(color = color, radius = 4f, center = Offset(xOf(p.first), yOf(p.second)))
+                            }
+                        }
+
+                        // baseline + date labels
+                        drawLine(color = Color(0xFFE1E4EC), start = Offset(plotLeft, chartH), end = Offset(size.width, chartH), strokeWidth = 1f)
+                        allDates.forEach { d ->
+                            val label = shortDate(d)
+                            val m = textMeasurer.measure(label, axisStyle)
+                            val cx = xOf(d)
+                            val w = m.size.width.toFloat()
+                            val tx = (cx - w / 2f).coerceIn(plotLeft, size.width - w)
+                            drawText(m, topLeft = Offset(tx, chartH + 4f))
                         }
                     }
-                    // baseline + date labels
-                    drawLine(color = Color(0xFFE1E4EC), start = Offset(0f, chartH), end = Offset(size.width, chartH), strokeWidth = 1f)
-                    allDates.forEach { d ->
-                        val label = shortDate(d)
-                        val m = textMeasurer.measure(label, labelStyle)
-                        val cx = xOf(d)
-                        val w = m.size.width.toFloat()
-                        val tx = (cx - w / 2f).coerceIn(0f, size.width - w)
-                        drawText(textMeasurer, label, topLeft = Offset(tx, chartH + 4f), style = labelStyle)
-                    }
-                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(top = 6.dp),
@@ -873,4 +980,10 @@ private fun TrendChart(title: String, series: List<ChartSeries>) {
 private fun shortDate(d: String): String {
     val p = d.split("-")
     return if (p.size == 3) "${p[1].toIntOrNull() ?: p[1]}/${p[2].toIntOrNull() ?: p[2]}" else d
+}
+
+/** Axis tick label: up to 1 decimal, trailing ".0" trimmed. */
+private fun fmtTick(v: Double): String {
+    val r = (v * 10).roundToInt() / 10.0
+    return if (r % 1.0 == 0.0) r.toInt().toString() else r.toString()
 }

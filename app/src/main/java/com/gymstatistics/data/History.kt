@@ -24,7 +24,13 @@ data class ActionSummary(
 ) {
     /** 该动作被添加的次数. */
     val addedCount: Int get() = records.size
+
+    /** 该动作最近一次被做过的日期 (yyyy-MM-dd),无记录时为空. */
+    val lastDate: String? get() = records.maxOfOrNull { it.date }
 }
+
+/** 若某动作在过去 N 天内做过,则提示疲劳预警. */
+const val FATIGUE_WINDOW_DAYS = 3
 
 /** A chart series keyed by unit. */
 data class ChartSeries(
