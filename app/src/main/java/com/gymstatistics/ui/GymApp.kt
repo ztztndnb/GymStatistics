@@ -1,6 +1,14 @@
 package com.gymstatistics.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -92,191 +100,164 @@ import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+private enum class Screen { MAIN, HISTORY, SYNC }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GymApp(viewModel: GymViewModel) {
     val state = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
-    var showAdd by remember { mutableStateOf(false) }
-    var showCalendar by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var showHistory by remember { mutableStateOf(false) }
+    var screen by remember { mutableStateOf(Screen.MAIN) }
     var historySelected by remember { mutableStateOf<String?>(null) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var showCalendar by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
     var editingExerciseId by remember { mutableStateOf<String?>(null) }
     var prefillExercise by remember { mutableStateOf<ExerciseRecord?>(null) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
-    var showSync by remember { mutableStateOf(false) }
     var dragAccum by remember { mutableFloatStateOf(0f) }
 
-    if (showSync) {
-        SyncPage(viewModel = viewModel, onBack = { showSync = false })
-        return
-    }
-
-    if (showHistory) {
-        HistoryScreen(
-            data = state.data,
-            initial = historySelected,
-            onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
-            onBack = { showHistory = false; historySelected = null },
-            onPickFill = { name, record ->
-                prefillExercise = ExerciseRecord(
-                    name = name,
-                    data = record.data,
-                    unit = record.unit,
-                    count = record.count,
-                    sets = record.sets,
-                )
-                editingExerciseId = null
-                showHistory = false
-                historySelected = null
-                showAdd = true
-            },
-        )
-        return
-    }
-
-    val dateKey = selectedDate.toString()
-    val sessionForDay = state.data.sessions.firstOrNull { it.date == dateKey }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("GymStatistics", fontWeight = FontWeight.Bold) },
-                actions = {
-                    TextButton(onClick = { showHistory = true }) { Text("历史") }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragAccum = 0f },
-                        onDragEnd = {
-                            if (dragAccum < -100f) selectedDate = selectedDate.plusDays(1)     // 左滑 → 下一天
-                            else if (dragAccum > 100f) selectedDate = selectedDate.minusDays(1) // 右滑 → 上一天
-                            dragAccum = 0f
-                        },
-                    ) { _, amount -> dragAccum += amount }
-                },
-        ) {
-            DatePickerHeader(
-                selectedDate = selectedDate,
-                onOpenCalendar = { showCalendar = true },
-            )
-            WeekDayBar(
-                selectedDate = selectedDate,
-                onSelect = { selectedDate = it },
-            )
-            val dayExercises = sessionForDay?.exercises ?: emptyList()
-            if (dayExercises.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "这一天没有训练记录",
-                        color = MaterialTheme.colorScheme.outline,
-                        fontSize = 14.sp,
-                    )
-                }
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            // forward: new screen slides in from the right; backward: from the left (like a back navigation)
+            if (targetState.ordinal >= initialState.ordinal) {
+                (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
             } else {
-                if (sessionForDay?.note?.isNotBlank() == true) {
-                    Text(
-                        sessionForDay.note,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outline,
-                        fontSize = 13.sp,
-                    )
-                }
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(dayExercises, key = { it.id.ifEmpty { it.name + it.hashCode() } }) { ex ->
-                        ActionItemCard(
-                            exercise = ex,
-                            onEdit = {
-                                editingExerciseId = ex.id
-                                prefillExercise = ex
-                                showAdd = true
-                            },
-                            onDelete = { confirmDeleteId = ex.id },
+                (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+            }
+        },
+        label = "screen",
+    ) { scr ->
+        when (scr) {
+            Screen.MAIN -> {
+                val dateKey = selectedDate.toString()
+                val sessionForDay = state.data.sessions.firstOrNull { it.date == dateKey }
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("GymStatistics", fontWeight = FontWeight.Bold) },
+                            actions = { TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") } },
                         )
+                    },
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .padding(padding)
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { dragAccum = 0f },
+                                    onDragEnd = {
+                                        if (dragAccum < -100f) selectedDate = selectedDate.plusDays(1)     // 左滑 → 下一天
+                                        else if (dragAccum > 100f) selectedDate = selectedDate.minusDays(1) // 右滑 → 上一天
+                                        dragAccum = 0f
+                                    },
+                                ) { _, amount -> dragAccum += amount }
+                            },
+                    ) {
+                        AnimatedContent(
+                            targetState = selectedDate,
+                            modifier = Modifier.weight(1f),
+                            transitionSpec = {
+                                if (targetState > initialState) {
+                                    (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
+                                } else {
+                                    (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+                                }
+                            },
+                            label = "date",
+                        ) { date ->
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                DatePickerHeader(selectedDate = date, onOpenCalendar = { showCalendar = true })
+                                WeekDayBar(selectedDate = date, onSelect = { selectedDate = it })
+                                val session = state.data.sessions.firstOrNull { it.date == date.toString() }
+                                val dayExercises = session?.exercises ?: emptyList()
+                                if (dayExercises.isEmpty()) {
+                                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                        Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                                    }
+                                } else {
+                                    session?.note?.takeIf { it.isNotBlank() }?.let { note ->
+                                        Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                                    }
+                                    LazyColumn(modifier = Modifier.weight(1f)) {
+                                        items(dayExercises, key = { it.id.ifEmpty { it.name + it.hashCode() } }) { ex ->
+                                            ActionItemCard(
+                                                exercise = ex,
+                                                onEdit = { editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                                onDelete = { confirmDeleteId = ex.id },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            ElevatedButton(
+                                onClick = { editingExerciseId = null; prefillExercise = null; showAdd = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Filled.Add, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("记录动作")
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = { screen = Screen.SYNC }, modifier = Modifier.fillMaxWidth()) {
+                                Text("局域网同步")
+                            }
+                        }
                     }
                 }
-            }
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                ElevatedButton(
-                    onClick = {
-                        editingExerciseId = null
-                        prefillExercise = null
-                        showAdd = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("记录动作")
+
+                if (showCalendar) {
+                    MonthCalendarDialog(
+                        initial = selectedDate,
+                        onDismiss = { showCalendar = false },
+                        onSelect = { selectedDate = it; showCalendar = false },
+                    )
                 }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { showSync = true },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("局域网同步")
+                if (showAdd) {
+                    AddSessionDialog(
+                        defaultDate = selectedDate,
+                        initial = prefillExercise,
+                        initialNote = sessionForDay?.note ?: "",
+                        isEditing = editingExerciseId != null,
+                        onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
+                        onConfirm = { date, note, exercise ->
+                            if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
+                            else viewModel.addExercise(date, note, exercise)
+                            showAdd = false; editingExerciseId = null; prefillExercise = null
+                        },
+                    )
+                }
+                if (confirmDeleteId != null) {
+                    AlertDialog(
+                        onDismissRequest = { confirmDeleteId = null },
+                        title = { Text("删除动作") },
+                        text = { Text("确定删除这条动作记录吗?") },
+                        confirmButton = { TextButton(onClick = { viewModel.deleteExercise(dateKey, confirmDeleteId!!); confirmDeleteId = null }) { Text("删除") } },
+                        dismissButton = { TextButton(onClick = { confirmDeleteId = null }) { Text("取消") } },
+                    )
                 }
             }
+
+            Screen.HISTORY -> HistoryScreen(
+                data = state.data,
+                initial = historySelected,
+                onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
+                onBack = { screen = Screen.MAIN },
+                onPickFill = { name, record ->
+                    prefillExercise = ExerciseRecord(name = name, data = record.data, unit = record.unit, count = record.count, sets = record.sets)
+                    editingExerciseId = null
+                    screen = Screen.MAIN
+                    showAdd = true
+                },
+            )
+
+            Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
         }
-    }
-
-    if (showCalendar) {
-        MonthCalendarDialog(
-            initial = selectedDate,
-            onDismiss = { showCalendar = false },
-            onSelect = { selectedDate = it; showCalendar = false },
-        )
-    }
-
-    if (showAdd) {
-        AddSessionDialog(
-            defaultDate = selectedDate,
-            initial = prefillExercise,
-            initialNote = sessionForDay?.note ?: "",
-            isEditing = editingExerciseId != null,
-            onDismiss = {
-                showAdd = false
-                editingExerciseId = null
-                prefillExercise = null
-            },
-            onConfirm = { date, note, exercise ->
-                if (editingExerciseId != null) {
-                    viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
-                } else {
-                    viewModel.addExercise(date, note, exercise)
-                }
-                showAdd = false
-                editingExerciseId = null
-                prefillExercise = null
-            },
-        )
-    }
-
-    if (confirmDeleteId != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDeleteId = null },
-            title = { Text("删除动作") },
-            text = { Text("确定删除这条动作记录吗?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteExercise(dateKey, confirmDeleteId!!)
-                    confirmDeleteId = null
-                }) { Text("删除") }
-            },
-            dismissButton = { TextButton(onClick = { confirmDeleteId = null }) { Text("取消") } },
-        )
     }
 
     LaunchedEffect(state.message) {
@@ -751,93 +732,102 @@ private fun HistoryScreen(
             )
         },
     ) { padding ->
-        if (selected == null) {
-            if (actions.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("暂无已添加的动作", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+        AnimatedContent(
+            targetState = selected?.name,
+            transitionSpec = {
+                (slideInVertically { it / 3 } + fadeIn()) togetherWith (slideOutVertically { -it / 3 } + fadeOut())
+            },
+            label = "detail",
+        ) { name ->
+            val act = name?.let { n -> actions.firstOrNull { it.name == n } }
+            if (act == null) {
+                if (actions.isEmpty()) {
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Text("暂无已添加的动作", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+                        items(actions, key = { it.name }) { a ->
+                            ActionRow(
+                                a = a,
+                                fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
+                                onClick = { selectedName = a.name },
+                            )
+                        }
+                    }
                 }
             } else {
-                LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
-                    items(actions, key = { it.name }) { a ->
-                        ActionRow(
-                            a = a,
-                            fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
-                            onClick = { selectedName = a.name },
-                        )
-                    }
-                }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                Text(
-                    "共添加 ${selected.addedCount} 次 · 点某条记录可填入添加页",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outline,
-                    fontSize = 13.sp,
-                )
+                Column(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        "共添加 ${act.addedCount} 次 · 点某条记录可填入添加页",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outline,
+                        fontSize = 13.sp,
+                    )
 
-                // fatigue warning toggle (can be turned off per action)
-                val suppressed = data.suppressedFatigue.contains(selected.name)
-                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("疲劳预警", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (suppressed) "已关闭" else "三天内做过将在列表中显示黄色警示",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.outline,
+                    // fatigue warning toggle (can be turned off per action)
+                    val suppressed = data.suppressedFatigue.contains(act.name)
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("疲劳预警", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    if (suppressed) "已关闭" else "三天内做过将在列表中显示黄色警示",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                            Switch(
+                                checked = !suppressed,
+                                onCheckedChange = { onSetFatigueSuppressed(act.name, !it) },
                             )
                         }
-                        Switch(
-                            checked = !suppressed,
-                            onCheckedChange = { onSetFatigueSuppressed(selected.name, !it) },
-                        )
                     }
-                }
-                if (!suppressed) {
-                    fatigueInfoOf(selected, today, emptySet())?.let { info ->
-                        Text(
-                            info,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                            fontSize = 12.sp,
-                            color = Color(0xFFB26A00),
-                        )
-                    }
-                }
-
-                selected.records.forEach { r ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clickable { onPickFill(selected.name, r) },
-                    ) {
-                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!suppressed) {
+                        fatigueInfoOf(act, today, emptySet())?.let { info ->
                             Text(
-                                r.date,
-                                modifier = Modifier.width(84.dp),
-                                color = MaterialTheme.colorScheme.outline,
+                                info,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                                 fontSize = 12.sp,
+                                color = Color(0xFFB26A00),
                             )
-                            Text(recordLine(r), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
-                // Charts split by unit (one chart per unit).
-                buildSeriesByData(selected).forEach { s ->
-                    TrendChart("数据趋势(${s.label})", listOf(s), yAxisLabel = s.label)
+                    act.records.forEach { r ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clickable { onPickFill(act.name, r) },
+                        ) {
+                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    r.date,
+                                    modifier = Modifier.width(84.dp),
+                                    color = MaterialTheme.colorScheme.outline,
+                                    fontSize = 12.sp,
+                                )
+                                Text(recordLine(r), style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    // Charts split by unit (one chart per unit).
+                    buildSeriesByData(act).forEach { s ->
+                        TrendChart("数据趋势(${s.label})", listOf(s), yAxisLabel = s.label)
+                    }
+                    buildSeriesByTotalCount(act).forEach { s ->
+                        TrendChart("总个数趋势(${s.label})", listOf(s), yAxisLabel = "个")
+                    }
+                    Spacer(Modifier.height(24.dp))
                 }
-                buildSeriesByTotalCount(selected).forEach { s ->
-                    TrendChart("总个数趋势(${s.label})", listOf(s), yAxisLabel = "个")
-                }
-                Spacer(Modifier.height(24.dp))
             }
         }
     }
