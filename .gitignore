@@ -41,3 +41,6 @@ captures/
 .cxx/
 keystore.properties
 keystore/
+
+### CodeGraph ###
+.codegraph/

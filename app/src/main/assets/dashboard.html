@@ -31,6 +31,17 @@
     border: 1px solid #d6dbe6; color: #1e88e5; font-weight: 600;
   }
   .actions a:hover, .actions button:hover { background: #eef3ff; }
+  .import-panel {
+    background: #fff; border: 1px solid #e2e6ef; border-radius: 12px; padding: 16px; margin-bottom: 18px;
+  }
+  .import-panel h2 { margin: 0 0 6px; font-size: 17px; }
+  .import-panel .hint { color: #6b7280; font-size: 13px; margin: 6px 0 12px; }
+  .import-options { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: 14px; }
+  .import-options input[type="date"] { padding: 7px 8px; border: 1px solid #d6dbe6; border-radius: 6px; }
+  .import-panel button { border: none; cursor: pointer; padding: 9px 16px; border-radius: 8px; font-size: 14px; background: #1e88e5; color: #fff; font-weight: 600; }
+  .import-panel button:disabled { cursor: not-allowed; opacity: .5; }
+  .import-status { min-height: 20px; margin-top: 10px; font-size: 13px; color: #374151; }
+  .import-status.error { color: #c62828; }
   section.day {
     background: #fff; border: 1px solid #e2e6ef; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
   }
@@ -59,6 +70,20 @@
     <button id="refreshBtn">↻ 刷新</button>
   </div>
 
+  <section class="import-panel">
+    <h2>导入数据到手机</h2>
+    <div class="hint">选择由 GymStatistics 导出的 JSON 文件，将数据导入当前手机。</div>
+    <input id="importFile" type="file" accept=".json,application/json">
+    <div id="importFileInfo" class="hint">尚未选择文件</div>
+    <div class="import-options">
+      <label><input id="importAll" type="radio" name="importMode" value="all" checked> 全部导入</label>
+      <label><input id="importByDate" type="radio" name="importMode" value="date"> 按日期导入</label>
+      <input id="importDate" type="date" disabled>
+    </div>
+    <button id="importBtn" disabled>导入到手机</button>
+    <div id="importStatus" class="import-status" role="status"></div>
+  </section>
+
   <div class="stats">
     <div class="card"><div class="num" id="nSessions">0</div><div class="lbl">训练天数</div></div>
     <div class="card"><div class="num" id="nExercises">0</div><div class="lbl">动作数</div></div>
@@ -70,6 +95,9 @@
   <div class="footer">数据来源:你的手机 · GymStatistics 局域网同步</div>
 </div>
 <script>
+  let currentSessions = [];
+  let pendingImport = null;
+
   const fmtW = (w) => (w == null ? "-" : String(w));
   const fmtR = (r) => (r == null ? "-" : String(r));
   const fmtDate = (d) => {
@@ -85,6 +113,7 @@
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
       const sessions = (data.sessions || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+      currentSessions = sessions;
       document.getElementById("exported").textContent =
         "同步自手机  ·  " + (data.exportedAt || "刚刚") + "  ·  每 5 秒自动刷新";
 
@@ -170,6 +199,102 @@
       })
       .catch(() => {});
   }
+
+  function parseSessions(json) {
+    if (typeof json !== "string" || !json.trim()) throw new Error("文件为空");
+    let payload;
+    try {
+      payload = JSON.parse(json.replace(/^\uFEFF/, ""));
+    } catch (err) {
+      throw new Error("JSON 格式无效");
+    }
+    if (!payload || !Array.isArray(payload.sessions)) throw new Error("文件不是 GymStatistics 导出的数据");
+    return payload.sessions;
+  }
+
+  function sessionsForMode(sessions, mode, date) {
+    return sessions.filter((session) => mode === "all" || session.date === date);
+  }
+
+  function duplicateDates(incoming, existing, mode, date) {
+    const existingDates = new Set(existing.map((session) => session.date));
+    return [...new Set(sessionsForMode(incoming, mode, date).map((session) => session.date))]
+      .filter((sessionDate) => existingDates.has(sessionDate))
+      .sort();
+  }
+
+  window.GymStatisticsImport = { parseSessions, duplicateDates };
+
+  function setImportStatus(message, isError = false) {
+    const status = document.getElementById("importStatus");
+    status.textContent = message;
+    status.className = "import-status" + (isError ? " error" : "");
+  }
+
+  function selectedImportMode() {
+    const byDate = document.getElementById("importByDate").checked;
+    const date = document.getElementById("importDate").value;
+    if (byDate && !date) throw new Error("请选择导入日期");
+    return { mode: byDate ? "date" : "all", date: byDate ? date : null };
+  }
+
+  async function submitImport(overwriteDuplicates) {
+    const selection = selectedImportMode();
+    const response = await fetch("api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: selection.mode,
+        date: selection.date,
+        overwriteDuplicates,
+        sessions: pendingImport,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.error || `HTTP ${response.status}`);
+    setImportStatus(`导入完成：新增 ${result.added || 0} 条，重复 ${result.duplicates || 0} 条（跳过 ${result.skipped || 0} / 合并 ${result.overwritten || 0}）`);
+    pendingImport = null;
+    document.getElementById("importBtn").disabled = true;
+    document.getElementById("importFile").value = "";
+    await load();
+  }
+
+  document.getElementById("importFile").addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      const sessions = parseSessions(await file.text());
+      pendingImport = sessions;
+      document.getElementById("importFileInfo").textContent = `${file.name}：${new Set(sessions.map((s) => s.date)).size} 个日期 / ${sessions.length} 条记录`;
+      document.getElementById("importBtn").disabled = false;
+      setImportStatus("文件已读取，请选择导入范围后开始导入。");
+    } catch (err) {
+      pendingImport = null;
+      document.getElementById("importBtn").disabled = true;
+      document.getElementById("importFileInfo").textContent = "文件读取失败";
+      setImportStatus(String(err.message || err), true);
+    }
+  });
+
+  function updateImportDateState() {
+    document.getElementById("importDate").disabled = !document.getElementById("importByDate").checked;
+  }
+  document.getElementById("importAll").addEventListener("change", updateImportDateState);
+  document.getElementById("importByDate").addEventListener("change", updateImportDateState);
+  document.getElementById("importBtn").addEventListener("click", async () => {
+    if (!pendingImport) return;
+    try {
+      const selection = selectedImportMode();
+      const duplicates = duplicateDates(pendingImport, currentSessions, selection.mode, selection.date);
+      const overwrite = duplicates.length > 0 && window.confirm(
+        `检测到 ${duplicates.length} 个日期已存在。点击“确定”合并(覆盖)，点击“取消”跳过重复。`,
+      );
+      setImportStatus("正在导入…");
+      await submitImport(overwrite);
+    } catch (err) {
+      setImportStatus(String(err.message || err), true);
+    }
+  });
 
   document.getElementById("dlJson").addEventListener("click", () => downloadExport("api/export.json", "gymstatistics", "json"));
   document.getElementById("dlCsv").addEventListener("click", () => downloadExport("api/export.csv", "gymstatistics", "csv"));

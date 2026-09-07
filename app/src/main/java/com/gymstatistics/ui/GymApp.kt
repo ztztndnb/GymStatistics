@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -190,7 +191,7 @@ fun GymApp(viewModel: GymViewModel) {
                                         Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
                                     }
                                     LazyColumn(modifier = Modifier.weight(1f)) {
-                                        items(dayExercises, key = { it.id.ifEmpty { it.name + it.hashCode() } }) { ex ->
+                                        itemsIndexed(dayExercises, key = { index, exercise -> "${exercise.id.ifEmpty { exercise.name }}#$index" }) { _, ex ->
                                             ActionItemCard(
                                                 exercise = ex,
                                                 onEdit = { editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
@@ -493,7 +494,9 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val json = try {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes().toString(Charsets.UTF_8).removePrefix("\uFEFF")
+                } ?: ""
             } catch (e: Exception) { "" }
             val parsed = parseImportSessions(json)
             if (parsed.isNotEmpty()) {
@@ -571,8 +574,8 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = { filePicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
-                Text("从电脑导入数据(选文件)")
+            OutlinedButton(onClick = { filePicker.launch(arrayOf("application/json", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
+                Text("从文件导入数据")
             }
         }
     }

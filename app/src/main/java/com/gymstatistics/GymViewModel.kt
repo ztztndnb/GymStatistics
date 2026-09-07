@@ -165,21 +165,36 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     fun importSessions(incoming: List<SessionRecord>, mode: ImportMode, overwriteDuplicates: Boolean): ImportResult {
         val current = uiState.data
         val sessions = current.sessions.toMutableList()
+        val usedExerciseIds = sessions
+            .flatMap { it.exercises }
+            .mapNotNull { it.id.takeIf(String::isNotBlank) }
+            .toMutableSet()
         var added = 0; var duplicates = 0; var skipped = 0; var overwritten = 0
         val incomingByDate = incoming.filter { sessionMatchesMode(it, mode) }.groupBy { it.date }
         for ((date, inc) in incomingByDate) {
+            val normalizedIncoming = inc.map { session ->
+                session.copy(exercises = session.exercises.map { exercise ->
+                    var id = exercise.id
+                    if (id.isBlank() || !usedExerciseIds.add(id)) {
+                        do {
+                            id = UUID.randomUUID().toString()
+                        } while (!usedExerciseIds.add(id))
+                    }
+                    exercise.copy(id = id)
+                })
+            }
             val idx = sessions.indexOfFirst { it.date == date }
             if (idx >= 0) {
                 duplicates += inc.size
                 if (overwriteDuplicates) {
                     val existing = sessions[idx]
-                    sessions[idx] = existing.copy(exercises = existing.exercises + inc.flatMap { it.exercises })
+                    sessions[idx] = existing.copy(exercises = existing.exercises + normalizedIncoming.flatMap { it.exercises })
                     overwritten += inc.size
                 } else {
                     skipped += inc.size
                 }
             } else {
-                sessions.addAll(inc)
+                sessions.addAll(normalizedIncoming)
                 added += inc.size
             }
         }

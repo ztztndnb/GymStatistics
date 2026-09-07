@@ -23,7 +23,7 @@ class WorkoutRepository(private val context: Context) {
     suspend fun load(): WorkoutData = withContext(Dispatchers.IO) {
         if (file.exists()) {
             try {
-                AppJson.json.decodeFromString(WorkoutData.serializer(), file.readText())
+                AppJson.json.decodeFromString(WorkoutData.serializer(), file.readText(Charsets.UTF_8))
             } catch (e: Exception) {
                 WorkoutData()
             }
@@ -33,6 +33,6 @@ class WorkoutRepository(private val context: Context) {
     }
 
     suspend fun save(data: WorkoutData) = withContext(Dispatchers.IO) {
-        file.writeText(AppJson.json.encodeToString(WorkoutData.serializer(), data))
+        file.writeText(AppJson.json.encodeToString(WorkoutData.serializer(), data), Charsets.UTF_8)
     }
 }
