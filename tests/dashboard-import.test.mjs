@@ -130,8 +130,8 @@ test("history action search supports fuzzy, full-pinyin, and initials matching",
 });
 
 test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle names", () => {
-  assert.match(gymAppSource, /Text\("选择锻炼肌群\(演示\)"\)/);
-  assert.doesNotMatch(gymAppSource, /if \(BuildConfig\.DEBUG\) \{[\s\S]*?选择锻炼肌群\(演示\)/);
+  assert.match(gymAppSource, /Text\("选择锻炼肌群"\)/);
+  assert.doesNotMatch(gymAppSource, /选择锻炼肌群\(演示\)/);
   assert.match(gymAppSource, /WebView\(context\)/);
   assert.match(gymAppSource, /DialogProperties\(usePlatformDefaultWidth = false\)/);
   assert.match(gymAppSource, /setSupportZoom\(true\)/);
@@ -150,6 +150,16 @@ test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle name
   assert.match(musclePickerSource, /window\.addEventListener\('error'/);
   assert.match(musclePickerSource, /id="error"/);
   assert.match(musclePickerSource, /#body-map \{ height: calc\(100vh - 156px\);/);
+});
+
+test("muscle selections are persisted with each exercise and restored in the editor", () => {
+  assert.match(modelsSource, /data class MuscleSelection\([\s\S]*val id: String,[\s\S]*val name: String/);
+  assert.match(modelsSource, /val muscles: List<MuscleSelection> = emptyList\(\)/);
+  assert.match(gymAppSource, /muscles = exercise\.muscles/);
+  assert.match(gymAppSource, /addJavascriptInterface\(/);
+  assert.match(gymAppSource, /onSelectionChanged =/);
+  assert.match(musclePickerSource, /AndroidMusclePicker\.onSelectionChanged/);
+  assert.match(musclePickerSource, /function setSelectedMuscles\(items\)/);
 });
 
 test("dashboard import detects duplicate dates before sending one request", async () => {

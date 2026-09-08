@@ -21,3 +21,8 @@
 
 # --- Model data classes ---
 -keep class com.gymstatistics.data.** { *; }
+
+# --- WebView muscle picker bridge ---
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

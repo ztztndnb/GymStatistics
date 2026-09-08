@@ -23,9 +23,9 @@
     <button type="button" data-view="back">背面</button>
     <button type="button" data-clear>清空</button>
   </div>
+  <div id="selected">已选择：<strong>未选择</strong></div>
   <div id="hint">双指缩放，拖动查看细节；点按肌肉可多选。</div>
   <div id="body-map"></div>
-  <div id="selected">已选择：<strong>未选择</strong></div>
   <div id="error" role="alert"></div>
   <script>
     window.addEventListener('error', event => {
@@ -82,7 +82,25 @@
         const muscle = [...BodyMuscles.FRONT_MUSCLES, ...BodyMuscles.BACK_MUSCLES].find(item => item.id === id);
         return muscle ? MUSCLE_NAMES[muscle.id] : id;
       });
-      selectedText.textContent = labels.length ? [...new Set(labels)].join('、') : '未选择';
+      selectedText.textContent = labels.length ? labels.join('、') : '未选择';
+    }
+
+    function notifySelection() {
+      if (window.AndroidMusclePicker) {
+        const items = [...selected].map(id => ({
+          id,
+          name: MUSCLE_NAMES[id],
+        }));
+        window.AndroidMusclePicker.onSelectionChanged(JSON.stringify(items));
+      }
+    }
+
+    function setSelectedMuscles(items) {
+      selected.clear();
+      items.forEach(item => {
+        if (item && MUSCLE_NAMES[item.id]) selected.add(item.id);
+      });
+      render();
     }
 
     function render() {
@@ -109,6 +127,7 @@
       });
       map.replaceChildren(svg);
       updateSelectedText();
+      notifySelection();
     }
 
     document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {

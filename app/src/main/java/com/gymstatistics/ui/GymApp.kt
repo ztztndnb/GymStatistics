@@ -92,6 +92,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.gymstatistics.GymViewModel
@@ -102,6 +105,7 @@ import com.gymstatistics.data.ChartSeries
 import com.gymstatistics.data.ExerciseRecord
 import com.gymstatistics.data.FATIGUE_WINDOW_DAYS
 import com.gymstatistics.data.ImportMode
+import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.SyncPayload
 import com.gymstatistics.data.WorkoutData
@@ -109,6 +113,7 @@ import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
 import android.icu.text.Transliterator
+import kotlinx.serialization.builtins.ListSerializer
 import java.text.Normalizer
 import java.time.LocalDate
 import java.time.YearMonth
@@ -748,6 +753,7 @@ private class ExerciseDraft(initial: ExerciseRecord? = null) {
     var unit by mutableStateOf(initial?.unit ?: "")
     var count by mutableStateOf(initial?.count?.toString() ?: "")
     var sets by mutableStateOf(initial?.sets?.toString() ?: "")
+    var muscles by mutableStateOf(initial?.muscles ?: emptyList())
 }
 
 @Composable
@@ -796,6 +802,7 @@ private fun AddSessionDialog(
                     unit = exercise.unit.trim(),
                     count = exercise.count.trim().toIntOrNull(),
                     sets = exercise.sets.trim().toIntOrNull(),
+                    muscles = exercise.muscles,
                 )
                 onConfirm(defaultDate.toString(), note, rec)
             }) { Text("保存") }
@@ -803,7 +810,13 @@ private fun AddSessionDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 
-    if (showMuscleDemo) MusclePickerDemo(onDismiss = { showMuscleDemo = false })
+    if (showMuscleDemo) {
+        MusclePickerDemo(
+            initialMuscles = exercise.muscles,
+            onSelectionChanged = { exercise.muscles = it },
+            onDismiss = { showMuscleDemo = false },
+        )
+    }
 }
 
 @Composable
@@ -859,15 +872,30 @@ private fun ExerciseEditor(draft: ExerciseDraft, onChooseMuscles: () -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
-            TextButton(onClick = onChooseMuscles, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群(演示)") }
+            if (draft.muscles.isNotEmpty()) {
+                Text(
+                    "已选择肌肉：${draft.muscles.joinToString("、") { it.name }}",
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
+            TextButton(onClick = onChooseMuscles, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群") }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MusclePickerDemo(onDismiss: () -> Unit) {
+private fun MusclePickerDemo(
+    initialMuscles: List<MuscleSelection>,
+    onSelectionChanged: (List<MuscleSelection>) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val initialJson = remember(initialMuscles) {
+        AppJson.json.encodeToString(ListSerializer(MuscleSelection.serializer()), initialMuscles)
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -875,7 +903,7 @@ private fun MusclePickerDemo(onDismiss: () -> Unit) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("选择锻炼肌群(演示)") },
+                    title = { Text("选择锻炼肌群") },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -894,7 +922,21 @@ private fun MusclePickerDemo(onDismiss: () -> Unit) {
                             builtInZoomControls = true
                             displayZoomControls = false
                         }
-                        webViewClient = WebViewClient()
+                        addJavascriptInterface(object {
+                            @JavascriptInterface
+                            fun onSelectionChanged(json: String) {
+                                mainHandler.post {
+                                    runCatching {
+                                        AppJson.json.decodeFromString<List<MuscleSelection>>(json)
+                                    }.onSuccess(onSelectionChanged)
+                                }
+                            }
+                        }, "AndroidMusclePicker")
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String) {
+                                view.evaluateJavascript("setSelectedMuscles($initialJson)", null)
+                            }
+                        }
                         loadUrl("file:///android_asset/muscle-picker/index.html")
                     }
                 },

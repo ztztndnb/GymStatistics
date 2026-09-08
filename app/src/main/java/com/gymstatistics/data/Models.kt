@@ -2,6 +2,12 @@ package com.gymstatistics.data
 
 import kotlinx.serialization.Serializable
 
+@Serializable
+data class MuscleSelection(
+    val id: String,
+    val name: String,
+)
+
 /**
  * One exercise (movement) recorded as a single line:
  *   data(value) + optional unit + count(个数) + sets(组数).
@@ -16,6 +22,7 @@ data class ExerciseRecord(
     val count: Int? = null,   // 个数(每组次数)
     val sets: Int? = null,    // 组数
     val note: String = "",    // 该动作的备注
+    val muscles: List<MuscleSelection> = emptyList(),
 )
 
 /** A workout for a given day. */
