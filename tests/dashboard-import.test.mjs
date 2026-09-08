@@ -131,6 +131,7 @@ test("history action search supports fuzzy, full-pinyin, and initials matching",
 
 test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle names", () => {
   assert.match(gymAppSource, /Text\("选择锻炼肌群\(演示\)"\)/);
+  assert.doesNotMatch(gymAppSource, /if \(BuildConfig\.DEBUG\) \{[\s\S]*?选择锻炼肌群\(演示\)/);
   assert.match(gymAppSource, /WebView\(context\)/);
   assert.match(gymAppSource, /DialogProperties\(usePlatformDefaultWidth = false\)/);
   assert.match(gymAppSource, /setSupportZoom\(true\)/);

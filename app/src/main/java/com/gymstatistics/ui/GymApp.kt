@@ -94,7 +94,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.gymstatistics.BuildConfig
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionSummary
@@ -860,9 +859,7 @@ private fun ExerciseEditor(draft: ExerciseDraft, onChooseMuscles: () -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
-            if (BuildConfig.DEBUG) {
-                TextButton(onClick = onChooseMuscles, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群(演示)") }
-            }
+            TextButton(onClick = onChooseMuscles, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群(演示)") }
         }
     }
 }
