@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>锻炼肌群演示</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #2c2630; background: #fffaff; font: 16px system-ui, sans-serif; }
+    .tabs { display: flex; gap: 8px; padding: 12px 12px 4px; }
+    button { border: 1px solid #d2bddc; border-radius: 18px; background: #fffaff; color: #4b3155; padding: 8px 14px; font: inherit; }
+    button.active { background: #7045ad; border-color: #7045ad; color: white; }
+    #hint { padding: 0 14px 8px; color: #5d5262; font-size: 14px; }
+    #body-map { height: calc(100vh - 156px); min-height: 620px; padding: 0 8px; }
+    #selected { padding: 8px 14px 16px; color: #5d5262; font-size: 14px; }
+    #selected strong { color: #7045ad; }
+    #error { padding: 0 14px 8px; color: #b3261e; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="tabs">
+    <button type="button" class="active" data-view="front">正面</button>
+    <button type="button" data-view="back">背面</button>
+    <button type="button" data-clear>清空</button>
+  </div>
+  <div id="hint">双指缩放，拖动查看细节；点按肌肉可多选。</div>
+  <div id="body-map"></div>
+  <div id="selected">已选择：<strong>未选择</strong></div>
+  <div id="error" role="alert"></div>
+  <script>
+    window.addEventListener('error', event => {
+      document.getElementById('error').textContent = `加载失败：${event.message}`;
+    });
+  </script>
+  <script src="body-muscles.umd.min.js"></script>
+  <script>
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const MUSCLE_NAMES = {
+      'head': '头部', 'face': '面部', 'neck-right': '右侧颈部', 'neck-left': '左侧颈部',
+      'shoulder-front-left': '左侧三角肌（前束）', 'shoulder-side-left': '左侧三角肌（中束）',
+      'shoulder-front-right': '右侧三角肌（前束）', 'shoulder-side-right': '右侧三角肌（中束）',
+      'biceps-left': '左侧肱二头肌', 'forearm-left': '左侧前臂', 'biceps-right': '右侧肱二头肌', 'forearm-right': '右侧前臂',
+      'chest-upper-left': '左上胸（锁骨部）', 'chest-lower-left': '左下胸（胸骨部）',
+      'chest-upper-right': '右上胸（锁骨部）', 'chest-lower-right': '右下胸（胸骨部）',
+      'abs-upper-left': '左上腹直肌', 'serratus-anterior-left': '左前锯肌', 'obliques-left': '左腹外斜肌',
+      'abs-upper-right': '右上腹直肌', 'abs-lower-right': '右下腹直肌', 'abs-lower-left': '左下腹直肌',
+      'serratus-anterior-right': '右前锯肌', 'obliques-right': '右腹外斜肌',
+      'hip-flexor-right': '右髋屈肌', 'hip-flexor-left': '左髋屈肌',
+      'quads-left': '左股四头肌', 'adductors-left': '左大腿内收肌', 'foot-left': '左脚部',
+      'tibialis-anterior-left': '左胫骨前肌', 'knee-left': '左膝部',
+      'quads-right': '右股四头肌', 'adductors-right': '右大腿内收肌', 'foot-right': '右脚部',
+      'tibialis-anterior-right': '右胫骨前肌', 'knee-right': '右膝部',
+      'elbow-right': '右肘部', 'hand-right': '右手部', 'elbow-left': '左肘部', 'hand-left': '左手部',
+      'head-back': '后脑', 'nape': '颈后部',
+      'traps-upper-left': '左斜方肌（上部）', 'traps-mid-left': '左斜方肌（中部）', 'traps-lower-left': '左斜方肌（下部）',
+      'traps-upper-right': '右斜方肌（上部）', 'traps-mid-right': '右斜方肌（中部）', 'traps-lower-right': '右斜方肌（下部）',
+      'lats-upper-left': '左背阔肌（上部）', 'deltoid-rear-left': '左三角肌（后束）',
+      'lats-mid-left': '左背阔肌（中部）', 'lats-lower-left': '左背阔肌（下部）',
+      'deltoid-rear-right': '右三角肌（后束）', 'lats-upper-right': '右背阔肌（上部）',
+      'lats-mid-right': '右背阔肌（中部）', 'lats-lower-right': '右背阔肌（下部）',
+      'triceps-long-left': '左肱三头肌（长头）', 'triceps-lateral-left': '左肱三头肌（外侧头）',
+      'hand-back-left': '左手背', 'forearm-flexors-left': '左前臂屈肌', 'forearm-extensors-left': '左前臂伸肌',
+      'triceps-long-right': '右肱三头肌（长头）', 'triceps-lateral-right': '右肱三头肌（外侧头）',
+      'hand-back-right': '右手背', 'forearm-flexors-right': '右前臂屈肌', 'forearm-extensors-right': '右前臂伸肌',
+      'spine': '脊柱', 'lower-back-erectors-left': '左竖脊肌', 'lower-back-ql-left': '左腰方肌',
+      'lower-back-erectors-right': '右竖脊肌', 'lower-back-ql-right': '右腰方肌',
+      'gluteus-medius-left': '左臀中肌', 'gluteus-maximus-left': '左臀大肌',
+      'gluteus-medius-right': '右臀中肌', 'gluteus-maximus-right': '右臀大肌',
+      'knee-back-left': '左膝后部', 'knee-back-right': '右膝后部',
+      'calves-gastroc-medial-left': '左腓肠肌内侧头', 'calves-gastroc-lateral-left': '左腓肠肌外侧头', 'calves-soleus-left': '左比目鱼肌',
+      'calves-gastroc-medial-right': '右腓肠肌内侧头', 'calves-gastroc-lateral-right': '右腓肠肌外侧头', 'calves-soleus-right': '右比目鱼肌',
+      'foot-back-left': '左脚背', 'hamstrings-medial-left': '左腘绳肌内侧', 'hamstrings-lateral-left': '左腘绳肌外侧',
+      'foot-back-right': '右脚背', 'hamstrings-medial-right': '右腘绳肌内侧', 'hamstrings-lateral-right': '右腘绳肌外侧',
+    };
+    const selected = new Set();
+    const map = document.getElementById('body-map');
+    const selectedText = document.querySelector('#selected strong');
+    let view = BodyMuscles.ViewSide.FRONT;
+
+    function updateSelectedText() {
+      const labels = [...selected].map(id => {
+        const muscle = [...BodyMuscles.FRONT_MUSCLES, ...BodyMuscles.BACK_MUSCLES].find(item => item.id === id);
+        return muscle ? MUSCLE_NAMES[muscle.id] : id;
+      });
+      selectedText.textContent = labels.length ? [...new Set(labels)].join('、') : '未选择';
+    }
+
+    function render() {
+      const muscles = view === BodyMuscles.ViewSide.FRONT
+        ? BodyMuscles.FRONT_MUSCLES
+        : BodyMuscles.BACK_MUSCLES;
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('viewBox', view === BodyMuscles.ViewSide.FRONT ? '0 0 35 93' : '37 0 35 93');
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', '可多选的肌肉图');
+      svg.style.cssText = 'width:auto;height:100%;max-width:100%;display:block;margin:auto';
+      muscles.forEach(muscle => {
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', muscle.path);
+        path.setAttribute('fill', selected.has(muscle.id) ? '#7045ad' : '#a9b9ca');
+        path.setAttribute('stroke', '#ffffff');
+        path.setAttribute('stroke-width', '0.12');
+        path.style.cursor = 'pointer';
+        path.addEventListener('click', () => {
+          selected.has(muscle.id) ? selected.delete(muscle.id) : selected.add(muscle.id);
+          render();
+        });
+        svg.appendChild(path);
+      });
+      map.replaceChildren(svg);
+      updateSelectedText();
+    }
+
+    document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+      view = button.dataset.view === 'front' ? BodyMuscles.ViewSide.FRONT : BodyMuscles.ViewSide.BACK;
+      document.querySelectorAll('[data-view]').forEach(tab => tab.classList.toggle('active', tab === button));
+      render();
+    }));
+    document.querySelector('[data-clear]').addEventListener('click', () => {
+      selected.clear();
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

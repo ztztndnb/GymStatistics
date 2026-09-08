@@ -89,6 +89,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import com.gymstatistics.BuildConfig
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionSummary
@@ -755,6 +761,7 @@ private fun AddSessionDialog(
     onConfirm: (String, String, ExerciseRecord) -> Unit,
 ) {
     var note by remember(initialNote) { mutableStateOf(initialNote) }
+    var showMuscleDemo by remember { mutableStateOf(false) }
     val exercise = remember(initial?.id) { ExerciseDraft(initial) }
 
     AlertDialog(
@@ -770,7 +777,7 @@ private fun AddSessionDialog(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                ExerciseEditor(draft = exercise)
+                ExerciseEditor(draft = exercise, onChooseMuscles = { showMuscleDemo = true })
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = note,
@@ -796,10 +803,12 @@ private fun AddSessionDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+
+    if (showMuscleDemo) MusclePickerDemo(onDismiss = { showMuscleDemo = false })
 }
 
 @Composable
-private fun ExerciseEditor(draft: ExerciseDraft) {
+private fun ExerciseEditor(draft: ExerciseDraft, onChooseMuscles: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(8.dp)) {
             OutlinedTextField(
@@ -851,6 +860,49 @@ private fun ExerciseEditor(draft: ExerciseDraft) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
+            if (BuildConfig.DEBUG) {
+                TextButton(onClick = onChooseMuscles, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群(演示)") }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MusclePickerDemo(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("选择锻炼肌群(演示)") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = { TextButton(onClick = onDismiss) { Text("完成") } },
+                )
+            },
+        ) { padding ->
+            AndroidView(
+                factory = {
+                    WebView(context).apply {
+                        settings.apply {
+                            javaScriptEnabled = true
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                        }
+                        webViewClient = WebViewClient()
+                        loadUrl("file:///android_asset/muscle-picker/index.html")
+                    }
+                },
+                modifier = Modifier.padding(padding).fillMaxSize(),
+            )
         }
     }
 }

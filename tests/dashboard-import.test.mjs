@@ -9,6 +9,10 @@ const gymAppSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatis
 const modelsSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/Models.kt", import.meta.url), "utf8");
 const repositorySource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/WorkoutRepository.kt", import.meta.url), "utf8");
 const viewModelSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/GymViewModel.kt", import.meta.url), "utf8");
+const gradleSource = fs.readFileSync(new URL("../app/build.gradle.kts", import.meta.url), "utf8");
+const musclePickerSource = fs.existsSync(new URL("../app/src/main/assets/muscle-picker/index.html", import.meta.url))
+  ? fs.readFileSync(new URL("../app/src/main/assets/muscle-picker/index.html", import.meta.url), "utf8")
+  : "";
 
 function createDashboard(fetchImpl) {
   const listeners = new Map();
@@ -123,6 +127,28 @@ test("history action search supports fuzzy, full-pinyin, and initials matching",
   assert.match(gymAppSource, /query\.all \{ char -> name\.indexOf\(char, index, ignoreCase = true\)\.also \{ index = it \+ 1 \} >= 0 \}/);
   assert.match(gymAppSource, /label = \{ Text\("搜索动作"\) \}/);
   assert.match(gymAppSource, /没有匹配的动作/);
+});
+
+test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle names", () => {
+  assert.match(gymAppSource, /Text\("选择锻炼肌群\(演示\)"\)/);
+  assert.match(gymAppSource, /WebView\(context\)/);
+  assert.match(gymAppSource, /DialogProperties\(usePlatformDefaultWidth = false\)/);
+  assert.match(gymAppSource, /setSupportZoom\(true\)/);
+  assert.match(gymAppSource, /builtInZoomControls = true/);
+  assert.match(gradleSource, /buildConfig = true/);
+  assert.match(gymAppSource, /loadUrl\("file:\/\/\/android_asset\/muscle-picker\/index\.html"\)/);
+  assert.match(musclePickerSource, /body-muscles\.umd\.min\.js/);
+  assert.match(musclePickerSource, /BodyMuscles\.FRONT_MUSCLES/);
+  assert.match(musclePickerSource, /document\.createElementNS\(SVG_NS, 'path'\)/);
+  assert.match(musclePickerSource, /const MUSCLE_NAMES = \{/);
+  assert.match(musclePickerSource, /'traps-upper-left': '左斜方肌（上部）'/);
+  assert.match(musclePickerSource, /MUSCLE_NAMES\[muscle\.id\]/);
+  assert.doesNotMatch(musclePickerSource, /\|back\|/);
+  assert.match(musclePickerSource, /ViewSide\.FRONT/);
+  assert.match(musclePickerSource, /ViewSide\.BACK/);
+  assert.match(musclePickerSource, /window\.addEventListener\('error'/);
+  assert.match(musclePickerSource, /id="error"/);
+  assert.match(musclePickerSource, /#body-map \{ height: calc\(100vh - 156px\);/);
 });
 
 test("dashboard import detects duplicate dates before sending one request", async () => {
