@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -17,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -165,6 +169,8 @@ fun GymApp(viewModel: GymViewModel) {
                                 ) { _, amount -> dragAccum += amount }
                             },
                     ) {
+                        DatePickerHeader(selectedDate = selectedDate, onOpenCalendar = { showCalendar = true })
+                        WeekDayBar(selectedDate = selectedDate, onSelect = { selectedDate = it })
                         AnimatedContent(
                             targetState = selectedDate,
                             modifier = Modifier.weight(1f),
@@ -175,18 +181,16 @@ fun GymApp(viewModel: GymViewModel) {
                                     (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
                                 }
                             },
-                            label = "date",
+                            label = "workout records",
                         ) { date ->
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                DatePickerHeader(selectedDate = date, onOpenCalendar = { showCalendar = true })
-                                WeekDayBar(selectedDate = date, onSelect = { selectedDate = it })
-                                val session = state.data.sessions.firstOrNull { it.date == date.toString() }
-                                val dayExercises = session?.exercises ?: emptyList()
-                                if (dayExercises.isEmpty()) {
-                                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                                        Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
-                                    }
-                                } else {
+                            val session = state.data.sessions.firstOrNull { it.date == date.toString() }
+                            val dayExercises = session?.exercises ?: emptyList()
+                            if (dayExercises.isEmpty()) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                                }
+                            } else {
+                                Column(modifier = Modifier.fillMaxSize()) {
                                     session?.note?.takeIf { it.isNotBlank() }?.let { note ->
                                         Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
                                     }
@@ -230,7 +234,7 @@ fun GymApp(viewModel: GymViewModel) {
                     AddSessionDialog(
                         defaultDate = selectedDate,
                         initial = prefillExercise,
-                        initialNote = sessionForDay?.note ?: "",
+                        initialNote = prefillExercise?.note ?: "",
                         isEditing = editingExerciseId != null,
                         onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
                         onConfirm = { date, note, exercise ->
@@ -324,45 +328,59 @@ private fun weekRangeLabel(date: LocalDate): String {
 private fun WeekDayBar(selectedDate: LocalDate, onSelect: (LocalDate) -> Unit) {
     val start = weekStart(selectedDate)
     val today = LocalDate.now()
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        repeat(7) { i ->
-            val d = start.plusDays(i.toLong())
-            val isSelected = d == selectedDate
-            val isToday = d == today
-            Column(
-                modifier = Modifier.weight(1f).clickable { onSelect(d) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    weekdayLabels[i],
-                    fontSize = 12.sp,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outline,
-                )
-                Spacer(Modifier.height(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                isSelected -> MaterialTheme.colorScheme.primary
-                                isToday -> MaterialTheme.colorScheme.primaryContainer
-                                else -> Color.Transparent
-                            }
-                        ),
-                    contentAlignment = Alignment.Center,
+    val selectedIndex = ChronoUnit.DAYS.between(start, selectedDate).toInt().coerceIn(0, 6)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        val cellWidth = maxWidth / 7
+        val highlightX = (cellWidth - 34.dp) / 2 + cellWidth * selectedIndex
+        val animatedHighlightX by animateDpAsState(
+            targetValue = highlightX,
+            animationSpec = tween(durationMillis = 260),
+            label = "selected date highlight",
+        )
+        Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = animatedHighlightX)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            repeat(7) { i ->
+                val d = start.plusDays(i.toLong())
+                val isSelected = d == selectedDate
+                val isToday = d == today
+                Column(
+                    modifier = Modifier.weight(1f).clickable { onSelect(d) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        d.dayOfMonth.toString(),
-                        color = when {
-                            isSelected -> MaterialTheme.colorScheme.onPrimary
-                            isToday -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 14.sp,
+                        weekdayLabels[i],
+                        fontSize = 12.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline,
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(if (isToday && !isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            d.dayOfMonth.toString(),
+                            color = when {
+                                isSelected -> MaterialTheme.colorScheme.onPrimary
+                                isToday -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp,
+                        )
+                    }
                 }
             }
         }
@@ -686,6 +704,9 @@ private fun ActionItemCard(exercise: ExerciseRecord, onEdit: () -> Unit, onDelet
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                exercise.note.takeIf { it.isNotBlank() }?.let { note ->
+                    Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
             }
             IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "编辑") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "删除") }
@@ -762,6 +783,7 @@ private fun AddSessionDialog(
                 val rec = ExerciseRecord(
                     name = exercise.name.trim(),
                     id = initial?.id ?: UUID.randomUUID().toString(),
+                    note = note.trim(),
                     data = exercise.data.trim().toDoubleOrNull(),
                     unit = exercise.unit.trim(),
                     count = exercise.count.trim().toIntOrNull(),
@@ -844,6 +866,8 @@ private fun HistoryScreen(
 ) {
     val actions = remember(data) { buildActions(data.sessions) }
     var selectedName by remember(initial) { mutableStateOf(initial) }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredActions = actions.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
     val selected = actions.firstOrNull { it.name == selectedName }
     val today = LocalDate.now()
 
@@ -876,12 +900,32 @@ private fun HistoryScreen(
                     }
                 } else {
                     LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
-                        items(actions, key = { it.name }) { a ->
-                            ActionRow(
-                                a = a,
-                                fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
-                                onClick = { selectedName = a.name },
+                        item {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("搜索动作") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             )
+                        }
+                        if (filteredActions.isEmpty()) {
+                            item {
+                                Text(
+                                    "没有匹配的动作",
+                                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                    color = MaterialTheme.colorScheme.outline,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        } else {
+                            items(filteredActions, key = { it.name }) { a ->
+                                ActionRow(
+                                    a = a,
+                                    fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
+                                    onClick = { selectedName = a.name },
+                                )
+                            }
                         }
                     }
                 }

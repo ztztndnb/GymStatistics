@@ -15,6 +15,7 @@ data class ExerciseRecord(
     val unit: String = "",    // 单位(kg/lbs/自定义/空)
     val count: Int? = null,   // 个数(每组次数)
     val sets: Int? = null,    // 组数
+    val note: String = "",    // 该动作的备注
 )
 
 /** A workout for a given day. */

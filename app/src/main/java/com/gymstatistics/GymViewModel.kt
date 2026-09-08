@@ -103,20 +103,21 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
             uiState = uiState.copy(message = "请填写动作名称")
             return
         }
-        val withId = exercise.copy(id = if (exercise.id.isEmpty()) UUID.randomUUID().toString() else exercise.id)
+        val withId = exercise.copy(
+            id = if (exercise.id.isEmpty()) UUID.randomUUID().toString() else exercise.id,
+            note = note.trim(),
+        )
         val current = uiState.data
         val existing = current.sessions.find { it.date == date }
         val newSessions = if (existing != null) {
             val merged = existing.copy(
                 exercises = existing.exercises + withId,
-                note = if (note.isBlank()) existing.note else note,
             )
             current.sessions.map { if (it.id == existing.id) merged else it }
         } else {
             current.sessions + SessionRecord(
                 id = UUID.randomUUID().toString(),
                 date = date,
-                note = note,
                 exercises = listOf(withId),
             )
         }
@@ -128,11 +129,10 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     fun updateExercise(date: String, exerciseId: String, updated: ExerciseRecord, note: String) {
         val current = uiState.data
         val session = current.sessions.find { it.date == date } ?: return
-        val newExercises = session.exercises.map { if (it.id == exerciseId) updated.copy(id = exerciseId) else it }
-        val newSession = session.copy(
-            exercises = newExercises,
-            note = if (note.isBlank()) session.note else note,
-        )
+        val newExercises = session.exercises.map {
+            if (it.id == exerciseId) updated.copy(id = exerciseId, note = note.trim()) else it
+        }
+        val newSession = session.copy(exercises = newExercises)
         persist(current.copy(sessions = current.sessions.map { if (it.id == session.id) newSession else it }))
         uiState = uiState.copy(message = "已更新 ${updated.name}")
     }

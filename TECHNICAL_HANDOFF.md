@@ -1,6 +1,6 @@
 # GymStatistics — Technical Handoff Document
 
-**Version:** 1.0.1 (`versionCode` = 2)
+**Version:** 1.0.6 (`versionCode` = 7)
 **Target:** Android, minSdk 26 / targetSdk 35 / compileSdk 36
 **Language / UI:** Kotlin 2.0.21 · Jetpack Compose · Material3
 **Persistence:** kotlinx.serialization → local JSON (offline-first)
@@ -281,7 +281,7 @@ Merge semantics (`importSessions`):
 
 ## 10. Release process
 
-- `app/build.gradle.kts`: `versionCode = 2`, `versionName = "1.0.1"`.
+- `app/build.gradle.kts`: `versionCode = 7`, `versionName = "1.0.6"`.
 - `release` build type: `isMinifyEnabled = true`, `isShrinkResources = true`,
   `proguardFiles(...)` = `proguard-rules.pro`. R8 shrinks the release APK to ~1.2 MB.
 - **Signing:** reads `keystore.properties` (gitignored) which points to

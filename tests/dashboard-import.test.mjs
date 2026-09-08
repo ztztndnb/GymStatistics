@@ -6,6 +6,7 @@ import vm from "node:vm";
 const dashboardHtml = fs.readFileSync(new URL("../app/src/main/assets/dashboard.html", import.meta.url), "utf8");
 const dashboardScript = dashboardHtml.match(/<script>([\s\S]*)<\/script>/)[1];
 const gymAppSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/ui/GymApp.kt", import.meta.url), "utf8");
+const modelsSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/Models.kt", import.meta.url), "utf8");
 const repositorySource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/WorkoutRepository.kt", import.meta.url), "utf8");
 const viewModelSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/GymViewModel.kt", import.meta.url), "utf8");
 
@@ -93,6 +94,33 @@ test("main action list cannot crash on duplicate exercise IDs", () => {
 test("import regenerates blank and colliding exercise IDs", () => {
   assert.match(viewModelSource, /usedExerciseIds/);
   assert.match(viewModelSource, /if \(id\.isBlank\(\) \|\| !usedExerciseIds\.add\(id\)\)/);
+});
+
+test("exercise notes are stored on and loaded from the individual exercise", () => {
+  assert.match(modelsSource, /data class ExerciseRecord\([\s\S]*val note: String = ""/);
+  assert.match(viewModelSource, /updated\.copy\(id = exerciseId, note = note\.trim\(\)\)/);
+  assert.match(gymAppSource, /initialNote = prefillExercise\?\.note \?: ""/);
+  assert.match(gymAppSource, /note = note\.trim\(\)/);
+});
+
+test("date changes keep the header fixed and animate the day content separately", () => {
+  assert.match(gymAppSource, /DatePickerHeader\(selectedDate = selectedDate/);
+  assert.match(gymAppSource, /label = "workout records"/);
+  assert.match(gymAppSource, /animateDpAsState\(/);
+  assert.match(gymAppSource, /animatedHighlightX/);
+  assert.doesNotMatch(gymAppSource, /AnimatedContent\(\s*targetState = selectedDate,[\s\S]*label = "date"/);
+});
+
+test("selected date background shares the day row vertical alignment", () => {
+  assert.match(gymAppSource, /matchParentSize\(\)/);
+  assert.doesNotMatch(gymAppSource, /offset\(x = animatedHighlightX, y = 28\.dp\)/);
+});
+
+test("history actions can be filtered by a case-insensitive search query", () => {
+  assert.match(gymAppSource, /var searchQuery by remember \{ mutableStateOf\(""\) \}/);
+  assert.match(gymAppSource, /actions\.filter \{ it\.name\.contains\(searchQuery\.trim\(\), ignoreCase = true\) \}/);
+  assert.match(gymAppSource, /label = \{ Text\("搜索动作"\) \}/);
+  assert.match(gymAppSource, /没有匹配的动作/);
 });
 
 test("dashboard import detects duplicate dates before sending one request", async () => {

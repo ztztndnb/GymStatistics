@@ -38,12 +38,12 @@
 
 APK 输出:
 - 调试版:`app\build\outputs\apk\debug\app-debug.apk`
-- 正式版:`app\build\outputs\apk\release\app-release.apk`(已签名,versionName `1.0.1`)
+- 正式版:`app\build\outputs\apk\release\app-release.apk`(已签名,versionName `1.0.6`)
 
 > 注:本仓库的 `local.properties` 指向本机 SDK,`build/`、`.gradle/`、`keystore.properties`、`keystore/` 等已被 `.gitignore` 忽略。
 
 ## 正式版发布信息
-- 当前版本:**1.0.1**(`versionCode=2`,`versionName="1.0.1"`)。
+- 当前版本:**1.0.6**(`versionCode=7`,`versionName="1.0.6"`)。
 - Release 构建启用 **R8 压缩 + 资源收缩**,并保留 `kotlinx.serialization` 序列化器与 `NanoHTTPD` 的混淆规则,release 包约 1.2MB。
 - 签名:release 使用根目录 `keystore.properties` 指向的 `keystore/gymstatistics-release.jks`(alias `gymstatistics`)。该文件已被 gitignore,不进入版本库。
 - ⚠️ 该密钥库为本地生成的示例,口令较弱且已出现在本会话命令中;**若要用于应用商店正式上架,请换用你自己生成、妥善保管的强口令密钥库**,且务必备份好——丢失将无法对后续版本用同一签名更新。
