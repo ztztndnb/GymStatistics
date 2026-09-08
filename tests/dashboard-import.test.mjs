@@ -116,9 +116,11 @@ test("selected date background shares the day row vertical alignment", () => {
   assert.doesNotMatch(gymAppSource, /offset\(x = animatedHighlightX, y = 28\.dp\)/);
 });
 
-test("history actions can be filtered by a case-insensitive search query", () => {
+test("history action search supports fuzzy, full-pinyin, and initials matching", () => {
   assert.match(gymAppSource, /var searchQuery by remember \{ mutableStateOf\(""\) \}/);
-  assert.match(gymAppSource, /actions\.filter \{ it\.name\.contains\(searchQuery\.trim\(\), ignoreCase = true\) \}/);
+  assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery\) \}/);
+  assert.match(gymAppSource, /Transliterator\.getInstance\("Han-Latin"\)/);
+  assert.match(gymAppSource, /query\.all \{ char -> name\.indexOf\(char, index, ignoreCase = true\)\.also \{ index = it \+ 1 \} >= 0 \}/);
   assert.match(gymAppSource, /label = \{ Text\("搜索动作"\) \}/);
   assert.match(gymAppSource, /没有匹配的动作/);
 });

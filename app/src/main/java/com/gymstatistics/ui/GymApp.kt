@@ -103,6 +103,8 @@ import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
+import android.icu.text.Transliterator
+import java.text.Normalizer
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
@@ -867,7 +869,7 @@ private fun HistoryScreen(
     val actions = remember(data) { buildActions(data.sessions) }
     var selectedName by remember(initial) { mutableStateOf(initial) }
     var searchQuery by remember { mutableStateOf("") }
-    val filteredActions = actions.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+    val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery) }
     val selected = actions.firstOrNull { it.name == selectedName }
     val today = LocalDate.now()
 
@@ -1005,6 +1007,30 @@ private fun HistoryScreen(
         }
     }
 }
+
+private val hanLatinTransliterator = Transliterator.getInstance("Han-Latin")
+
+private fun actionMatchesQuery(name: String, rawQuery: String): Boolean {
+    val query = normalizeSearchText(rawQuery)
+    if (query.isEmpty()) return true
+    val pinyin = normalizeSearchText(hanLatinTransliterator.transliterate(name))
+    return normalizeSearchText(name).contains(query) ||
+        pinyin.contains(query) ||
+        fuzzyMatches(name, rawQuery.trim()) ||
+        fuzzyMatches(pinyin, query) ||
+        fuzzyMatches(pinyinInitials(name), query)
+}
+
+private fun normalizeSearchText(text: String): String =
+    Normalizer.normalize(text, Normalizer.Form.NFD).filter { it.isLetterOrDigit() }.lowercase()
+
+private fun fuzzyMatches(name: String, query: String): Boolean {
+    var index = 0
+    return query.all { char -> name.indexOf(char, index, ignoreCase = true).also { index = it + 1 } >= 0 }
+}
+
+private fun pinyinInitials(name: String): String =
+    hanLatinTransliterator.transliterate(name).split(Regex("\\s+")).joinToString("") { it.firstOrNull()?.toString().orEmpty() }
 
 /** Returns the fatigue warning text if the action was done within [FATIGUE_WINDOW_DAYS], else null. */
 private fun fatigueInfoOf(a: ActionSummary, today: LocalDate, suppressed: Set<String>): String? {
