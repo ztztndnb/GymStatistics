@@ -775,14 +775,6 @@ private fun AddSessionDialog(
         title = { Text(if (isEditing) "编辑动作" else "记录训练") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "将添加到: ${defaultDate.year}年${defaultDate.monthValue}月${defaultDate.dayOfMonth}日",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
                 ExerciseEditor(draft = exercise, onChooseMuscles = { showMuscleDemo = true })
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(

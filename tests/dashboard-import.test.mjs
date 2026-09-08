@@ -192,6 +192,14 @@ test("muscle picker zoom is scoped to the body map", () => {
   assert.match(musclePickerSource, /applyMapTransform/);
 });
 
+test("muscle picker pans at the default scale", () => {
+  assert.match(musclePickerSource, /else if \(event\.touches\.length === 1 && gesture\?\.type === 'pan'\) \{/);
+});
+
+test("add action dialog omits the destination date label", () => {
+  assert.doesNotMatch(gymAppSource, /将添加到\s*[:：]/);
+});
+
 test("dashboard import detects duplicate dates before sending one request", async () => {
   const requests = [];
   const { elements, listeners, context } = createDashboard(async (url, options) => {
