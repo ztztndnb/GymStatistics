@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>锻炼肌群演示</title>
   <style>
     * { box-sizing: border-box; }
@@ -11,7 +11,8 @@
     button { border: 1px solid #d2bddc; border-radius: 18px; background: #fffaff; color: #4b3155; padding: 8px 14px; font: inherit; }
     button.active { background: #7045ad; border-color: #7045ad; color: white; }
     #hint { padding: 0 14px 8px; color: #5d5262; font-size: 14px; }
-    #body-map { height: calc(100vh - 156px); min-height: 620px; padding: 0 8px; }
+    #body-map { height: calc(100vh - 156px); min-height: 620px; padding: 0 8px; overflow: hidden; touch-action: none; }
+    #body-map svg { transform-origin: center center; touch-action: none; user-select: none; }
     #selected { padding: 8px 14px 16px; color: #5d5262; font-size: 14px; }
     #selected strong { color: #7045ad; }
     #error { padding: 0 14px 8px; color: #b3261e; font-size: 13px; }
@@ -76,6 +77,26 @@
     const map = document.getElementById('body-map');
     const selectedText = document.querySelector('#selected strong');
     let view = BodyMuscles.ViewSide.FRONT;
+    let mapScale = 1;
+    let mapTranslateX = 0;
+    let mapTranslateY = 0;
+    let gesture = null;
+
+    function applyMapTransform() {
+      const svg = map.querySelector('svg');
+      if (!svg) return;
+      svg.style.transform = `translate(${mapTranslateX}px, ${mapTranslateY}px) scale(${mapScale})`;
+    }
+
+    function touchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+
+    function clampMapScale(scale) {
+      return Math.min(4, Math.max(1, scale));
+    }
 
     function updateSelectedText() {
       const labels = [...selected].map(id => {
@@ -126,9 +147,54 @@
         svg.appendChild(path);
       });
       map.replaceChildren(svg);
+      applyMapTransform();
       updateSelectedText();
       notifySelection();
     }
+
+    map.addEventListener('touchstart', event => {
+      if (event.touches.length === 2) {
+        gesture = { type: 'pinch', distance: touchDistance(event.touches), scale: mapScale };
+      } else if (event.touches.length === 1) {
+        gesture = {
+          type: 'pan',
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+          translateX: mapTranslateX,
+          translateY: mapTranslateY,
+        };
+      }
+    }, { passive: false });
+
+    map.addEventListener('touchmove', event => {
+      if (event.touches.length === 2) {
+        if (gesture?.type !== 'pinch') {
+          gesture = { type: 'pinch', distance: touchDistance(event.touches), scale: mapScale };
+        }
+        mapScale = clampMapScale(gesture.scale * touchDistance(event.touches) / gesture.distance);
+        applyMapTransform();
+        event.preventDefault();
+      } else if (event.touches.length === 1 && gesture?.type === 'pan' && mapScale > 1) {
+        mapTranslateX = gesture.translateX + event.touches[0].clientX - gesture.x;
+        mapTranslateY = gesture.translateY + event.touches[0].clientY - gesture.y;
+        applyMapTransform();
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    map.addEventListener('touchend', event => {
+      if (event.touches.length === 1 && mapScale > 1) {
+        gesture = {
+          type: 'pan',
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+          translateX: mapTranslateX,
+          translateY: mapTranslateY,
+        };
+      } else if (event.touches.length === 0) {
+        gesture = null;
+      }
+    }, { passive: false });
 
     document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
       view = button.dataset.view === 'front' ? BodyMuscles.ViewSide.FRONT : BodyMuscles.ViewSide.BACK;

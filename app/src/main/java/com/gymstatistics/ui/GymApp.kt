@@ -103,7 +103,6 @@ import com.gymstatistics.data.ActionSummary
 import com.gymstatistics.data.AppJson
 import com.gymstatistics.data.ChartSeries
 import com.gymstatistics.data.ExerciseRecord
-import com.gymstatistics.data.FATIGUE_WINDOW_DAYS
 import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.SessionRecord
@@ -112,6 +111,7 @@ import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
+import com.gymstatistics.data.fatigueWarningsFor
 import android.icu.text.Transliterator
 import kotlinx.serialization.builtins.ListSerializer
 import java.text.Normalizer
@@ -271,9 +271,10 @@ fun GymApp(viewModel: GymViewModel) {
                 data = state.data,
                 initial = historySelected,
                 onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
+                onEditMuscles = { name, muscles -> viewModel.updateMusclesForAction(name, muscles) },
                 onBack = { screen = Screen.MAIN },
                 onPickFill = { name, record ->
-                    prefillExercise = ExerciseRecord(name = name, data = record.data, unit = record.unit, count = record.count, sets = record.sets)
+                    prefillExercise = ExerciseRecord(name = name, data = record.data, unit = record.unit, count = record.count, sets = record.sets, muscles = record.muscles)
                     editingExerciseId = null
                     screen = Screen.MAIN
                     showAdd = true
@@ -918,8 +919,8 @@ private fun MusclePickerDemo(
                     WebView(context).apply {
                         settings.apply {
                             javaScriptEnabled = true
-                            setSupportZoom(true)
-                            builtInZoomControls = true
+                            setSupportZoom(false)
+                            builtInZoomControls = false
                             displayZoomControls = false
                         }
                         addJavascriptInterface(object {
@@ -954,14 +955,18 @@ private fun HistoryScreen(
     data: WorkoutData,
     initial: String?,
     onSetFatigueSuppressed: (String, Boolean) -> Unit,
+    onEditMuscles: (String, List<MuscleSelection>) -> Unit,
     onBack: () -> Unit,
     onPickFill: (name: String, record: ActionRecord) -> Unit,
 ) {
     val actions = remember(data) { buildActions(data.sessions) }
     var selectedName by remember(initial) { mutableStateOf(initial) }
     var searchQuery by remember { mutableStateOf("") }
+    var editingMusclesFor by remember { mutableStateOf<String?>(null) }
+    var pendingMuscles by remember { mutableStateOf<List<MuscleSelection>>(emptyList()) }
     val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery) }
     val selected = actions.firstOrNull { it.name == selectedName }
+    val editingAction = actions.firstOrNull { it.name == editingMusclesFor }
     val today = LocalDate.now()
 
     BackHandler { if (selected != null) selectedName = null else onBack() }
@@ -1015,7 +1020,7 @@ private fun HistoryScreen(
                             items(filteredActions, key = { it.name }) { a ->
                                 ActionRow(
                                     a = a,
-                                    fatigueInfo = fatigueInfoOf(a, today, data.suppressedFatigue),
+                                    fatigueInfo = fatigueInfoOf(a, actions, today, data.suppressedFatigue),
                                     onClick = { selectedName = a.name },
                                 )
                             }
@@ -1036,6 +1041,23 @@ private fun HistoryScreen(
                         fontSize = 13.sp,
                     )
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (act.muscles.isEmpty()) "锻炼肌群：未选择"
+                            else "锻炼肌群：${act.muscles.joinToString("、") { it.name }}",
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                        )
+                        TextButton(onClick = {
+                            pendingMuscles = act.muscles
+                            editingMusclesFor = act.name
+                        }) { Text("编辑锻炼肌群") }
+                    }
+
                     // fatigue warning toggle (can be turned off per action)
                     val suppressed = data.suppressedFatigue.contains(act.name)
                     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -1055,7 +1077,7 @@ private fun HistoryScreen(
                         }
                     }
                     if (!suppressed) {
-                        fatigueInfoOf(act, today, emptySet())?.let { info ->
+                        fatigueInfoOf(act, actions, today, emptySet())?.let { info ->
                             Text(
                                 info,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
@@ -1097,6 +1119,17 @@ private fun HistoryScreen(
             }
         }
     }
+
+    editingAction?.let { action ->
+        MusclePickerDemo(
+            initialMuscles = action.muscles,
+            onSelectionChanged = { pendingMuscles = it },
+            onDismiss = {
+                onEditMuscles(action.name, pendingMuscles)
+                editingMusclesFor = null
+            },
+        )
+    }
 }
 
 private val hanLatinTransliterator = Transliterator.getInstance("Han-Latin")
@@ -1123,29 +1156,33 @@ private fun fuzzyMatches(name: String, query: String): Boolean {
 private fun pinyinInitials(name: String): String =
     hanLatinTransliterator.transliterate(name).split(Regex("\\s+")).joinToString("") { it.firstOrNull()?.toString().orEmpty() }
 
-/** Returns the fatigue warning text if the action was done within [FATIGUE_WINDOW_DAYS], else null. */
-private fun fatigueInfoOf(a: ActionSummary, today: LocalDate, suppressed: Set<String>): String? {
+/** Formats recent matching muscle groups and the actions that trained them. */
+private fun fatigueInfoOf(
+    a: ActionSummary,
+    allActions: List<ActionSummary>,
+    today: LocalDate,
+    suppressed: Set<String>,
+): String? {
     if (a.name in suppressed) return null
-    val last = a.lastDate ?: return null
-    val days = try { ChronoUnit.DAYS.between(LocalDate.parse(last), today).toInt() } catch (e: Exception) { return null }
-    if (days < 0 || days > FATIGUE_WINDOW_DAYS) return null
-    val whenTxt = if (days <= 0) "今天" else "${days}天前"
-    return "上次 ${shortDate(last)} · $whenTxt 做过"
+    return fatigueWarningsFor(a, allActions, today)
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString("\n") { warning ->
+            "${warning.muscle.name}：${warning.actions.joinToString("、") { "${it.name}（${it.whenText}）" }}"
+        }
 }
 
 @Composable
 private fun ActionRow(a: ActionSummary, fatigueInfo: String?, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable(onClick = onClick)) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(a.name, style = MaterialTheme.typography.titleMedium)
-                Text("${a.addedCount} 次", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(a.name, style = MaterialTheme.typography.titleMedium)
+                    Text("${a.addedCount} 次", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
             }
             if (fatigueInfo != null) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("⚠ 疲劳预警", color = Color(0xFFB26A00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(fatigueInfo, color = Color(0xFFB26A00), fontSize = 10.sp)
-                }
+                Text("⚠ 疲劳预警\n$fatigueInfo", color = Color(0xFFB26A00), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
             }
         }
     }

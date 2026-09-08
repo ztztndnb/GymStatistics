@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.gymstatistics.data.ExerciseRecord
 import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.ImportResult
+import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.WorkoutRepository
@@ -125,7 +126,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         uiState = uiState.copy(message = "已保存 ${exercise.name}")
     }
 
-    /** Update a single action (by id) within the day's session. */
+    /** Update a single action; its muscle selection applies to every same-name action. */
     fun updateExercise(date: String, exerciseId: String, updated: ExerciseRecord, note: String) {
         val current = uiState.data
         val session = current.sessions.find { it.date == date } ?: return
@@ -133,8 +134,28 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
             if (it.id == exerciseId) updated.copy(id = exerciseId, note = note.trim()) else it
         }
         val newSession = session.copy(exercises = newExercises)
-        persist(current.copy(sessions = current.sessions.map { if (it.id == session.id) newSession else it }))
+        val changedSessions = current.sessions.map { if (it.id == session.id) newSession else it }
+        val newSessions = changedSessions.map { day ->
+            day.copy(exercises = day.exercises.map { exercise ->
+                if (exercise.name == updated.name) exercise.copy(muscles = updated.muscles) else exercise
+            })
+        }
+        persist(current.copy(sessions = newSessions))
         uiState = uiState.copy(message = "已更新 ${updated.name}")
+    }
+
+    /** Update muscle groups for every occurrence of an action with the same name. */
+    fun updateMusclesForAction(name: String, muscles: List<MuscleSelection>) {
+        if (name.isBlank()) return
+        val clean = muscles.distinctBy { it.id }
+        val current = uiState.data
+        val newSessions = current.sessions.map { day ->
+            day.copy(exercises = day.exercises.map { exercise ->
+                if (exercise.name == name) exercise.copy(muscles = clean) else exercise
+            })
+        }
+        persist(current.copy(sessions = newSessions))
+        uiState = uiState.copy(message = "已更新 $name 的锻炼肌群")
     }
 
     /** Delete a single action (by id) from the day's session; drop the session if empty. */

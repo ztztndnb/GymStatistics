@@ -134,8 +134,8 @@ test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle name
   assert.doesNotMatch(gymAppSource, /选择锻炼肌群\(演示\)/);
   assert.match(gymAppSource, /WebView\(context\)/);
   assert.match(gymAppSource, /DialogProperties\(usePlatformDefaultWidth = false\)/);
-  assert.match(gymAppSource, /setSupportZoom\(true\)/);
-  assert.match(gymAppSource, /builtInZoomControls = true/);
+  assert.match(gymAppSource, /setSupportZoom\(false\)/);
+  assert.match(gymAppSource, /builtInZoomControls = false/);
   assert.match(gradleSource, /buildConfig = true/);
   assert.match(gymAppSource, /loadUrl\("file:\/\/\/android_asset\/muscle-picker\/index\.html"\)/);
   assert.match(musclePickerSource, /body-muscles\.umd\.min\.js/);
@@ -160,6 +160,36 @@ test("muscle selections are persisted with each exercise and restored in the edi
   assert.match(gymAppSource, /onSelectionChanged =/);
   assert.match(musclePickerSource, /AndroidMusclePicker\.onSelectionChanged/);
   assert.match(musclePickerSource, /function setSelectedMuscles\(items\)/);
+});
+
+test("history records retain muscles for muscle-based fatigue matching", () => {
+  const historySource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/History.kt", import.meta.url), "utf8");
+  assert.match(historySource, /val muscles: List<MuscleSelection> = emptyList\(\)/);
+  assert.match(historySource, /ActionRecord\(s\.date, it\.data, it\.unit, it\.count, it\.sets, it\.muscles\)/);
+  assert.match(gymAppSource, /fatigueWarningsFor\(a, allActions, today/);
+  assert.match(gymAppSource, /肌群/);
+});
+
+test("editing an action's muscles updates every record with that action name", () => {
+  assert.match(viewModelSource, /fun updateMusclesForAction\(name: String, muscles: List<MuscleSelection>\)/);
+  assert.match(viewModelSource, /if \(exercise\.name == name\) exercise\.copy\(muscles = clean\)/);
+  assert.match(gymAppSource, /onEditMuscles/);
+  assert.match(gymAppSource, /编辑锻炼肌群/);
+});
+
+test("fatigue warning excludes the third day", () => {
+  const historySource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/History.kt", import.meta.url), "utf8");
+  assert.match(historySource, /days\s+!in\s+0\s+until\s+FATIGUE_WINDOW_DAYS/);
+  assert.doesNotMatch(historySource, /days\s+!in\s+0\.\.FATIGUE_WINDOW_DAYS/);
+});
+
+test("muscle picker zoom is scoped to the body map", () => {
+  assert.match(gymAppSource, /setSupportZoom\(false\)/);
+  assert.match(gymAppSource, /builtInZoomControls = false/);
+  assert.match(musclePickerSource, /user-scalable=no/);
+  assert.match(musclePickerSource, /touchstart/);
+  assert.match(musclePickerSource, /touchmove/);
+  assert.match(musclePickerSource, /applyMapTransform/);
 });
 
 test("dashboard import detects duplicate dates before sending one request", async () => {

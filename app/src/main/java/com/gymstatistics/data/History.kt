@@ -1,5 +1,8 @@
 package com.gymstatistics.data
 
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
 /** A single occurrence of an action (from one session). */
 data class ActionRecord(
     val date: String,
@@ -7,6 +10,7 @@ data class ActionRecord(
     val unit: String,
     val count: Int?,
     val sets: Int?,
+    val muscles: List<MuscleSelection> = emptyList(),
 ) {
     /** 总个数 = 个数 × 组数 (组数缺省按 1). */
     val totalCount: Int?
@@ -27,9 +31,11 @@ data class ActionSummary(
 
     /** 该动作最近一次被做过的日期 (yyyy-MM-dd),无记录时为空. */
     val lastDate: String? get() = records.maxOfOrNull { it.date }
+
+    val muscles: List<MuscleSelection> get() = records.flatMap { it.muscles }.distinctBy { it.id }
 }
 
-/** 若某动作在过去 N 天内做过,则提示疲劳预警. */
+/** 若某动作在过去不满 N 天内做过,则提示疲劳预警. */
 const val FATIGUE_WINDOW_DAYS = 3
 
 /** A chart series keyed by unit. */
@@ -38,6 +44,45 @@ data class ChartSeries(
     val points: List<Pair<String, Double>>, // (date, value)
 )
 
+data class RecentAction(
+    val name: String,
+    val date: String,
+    val whenText: String,
+)
+
+data class FatigueWarning(
+    val muscle: MuscleSelection,
+    val actions: List<RecentAction>,
+)
+
+/** Finds recent actions that share each muscle group with [action]. */
+fun fatigueWarningsFor(
+    action: ActionSummary,
+    allActions: List<ActionSummary>,
+    today: LocalDate,
+): List<FatigueWarning> {
+    val targetMuscles = action.muscles.associateBy { it.id }
+    if (targetMuscles.isEmpty()) return emptyList()
+
+    val matches = allActions.flatMap { other ->
+        other.records.flatMap { record ->
+            val days = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(record.date), today).toInt() }.getOrNull()
+            if (days == null || days !in 0 until FATIGUE_WINDOW_DAYS) return@flatMap emptyList()
+            val whenText = if (days == 0) "今天" else "${days}天前"
+            record.muscles
+                .filter { it.id in targetMuscles }
+                .map { it.id to RecentAction(other.name, record.date, whenText) }
+        }
+    }
+    return matches.groupBy({ it.first }, { it.second })
+        .mapNotNull { (id, records) ->
+            targetMuscles[id]?.let { muscle ->
+                FatigueWarning(muscle, records.distinctBy { it.name to it.date }.sortedByDescending { it.date })
+            }
+        }
+        .sortedBy { it.muscle.name }
+}
+
 /**
  * Group all session exercises by name (same name = same action).
  * Each action's records are sorted with [actionComparator]; the action list
@@ -45,7 +90,7 @@ data class ChartSeries(
  */
 fun buildActions(sessions: List<SessionRecord>): List<ActionSummary> {
     val grouped = sessions
-        .flatMap { s -> s.exercises.map { it.name to ActionRecord(s.date, it.data, it.unit, it.count, it.sets) } }
+        .flatMap { s -> s.exercises.map { it.name to ActionRecord(s.date, it.data, it.unit, it.count, it.sets, it.muscles) } }
         .groupBy({ it.first }, { it.second })
     return grouped.map { (name, recs) ->
         ActionSummary(name, recs.sortedWith(actionComparator()))
