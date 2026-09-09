@@ -122,11 +122,17 @@ test("selected date background shares the day row vertical alignment", () => {
 
 test("history action search supports fuzzy, full-pinyin, and initials matching", () => {
   assert.match(gymAppSource, /var searchQuery by remember \{ mutableStateOf\(""\) \}/);
-  assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery\) \}/);
+  assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery, it\.muscles\) \}/);
   assert.match(gymAppSource, /Transliterator\.getInstance\("Han-Latin"\)/);
   assert.match(gymAppSource, /query\.all \{ char -> name\.indexOf\(char, index, ignoreCase = true\)\.also \{ index = it \+ 1 \} >= 0 \}/);
-  assert.match(gymAppSource, /label = \{ Text\("搜索动作"\) \}/);
+  assert.match(gymAppSource, /label = \{ Text\("搜索动作或肌群"\) \}/);
   assert.match(gymAppSource, /没有匹配的动作/);
+});
+
+test("history action search also matches muscle names", () => {
+  assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery, it\.muscles\) \}/);
+  assert.match(gymAppSource, /muscles\.any \{ muscle -> searchFieldMatches\(muscle\.name/);
+  assert.match(gymAppSource, /label = \{ Text\("搜索动作或肌群"\) \}/);
 });
 
 test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle names", () => {

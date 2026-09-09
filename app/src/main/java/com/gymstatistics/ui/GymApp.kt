@@ -1037,7 +1037,7 @@ private fun HistoryScreen(
     var searchQuery by remember { mutableStateOf("") }
     var editingMusclesFor by remember { mutableStateOf<String?>(null) }
     var pendingMuscles by remember { mutableStateOf<List<MuscleSelection>>(emptyList()) }
-    val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery) }
+    val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery, it.muscles) }
     val selected = actions.firstOrNull { it.name == selectedName }
     val editingAction = actions.firstOrNull { it.name == editingMusclesFor }
     val today = LocalDate.now()
@@ -1075,7 +1075,7 @@ private fun HistoryScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                label = { Text("搜索动作") },
+                                label = { Text("搜索动作或肌群") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             )
@@ -1207,9 +1207,18 @@ private fun HistoryScreen(
 
 private val hanLatinTransliterator = Transliterator.getInstance("Han-Latin")
 
-private fun actionMatchesQuery(name: String, rawQuery: String): Boolean {
+private fun actionMatchesQuery(
+    name: String,
+    rawQuery: String,
+    muscles: List<MuscleSelection> = emptyList(),
+): Boolean {
     val query = normalizeSearchText(rawQuery)
     if (query.isEmpty()) return true
+    return searchFieldMatches(name, rawQuery, query) ||
+        muscles.any { muscle -> searchFieldMatches(muscle.name, rawQuery, query) }
+}
+
+private fun searchFieldMatches(name: String, rawQuery: String, query: String): Boolean {
     val pinyin = normalizeSearchText(hanLatinTransliterator.transliterate(name))
     return normalizeSearchText(name).contains(query) ||
         pinyin.contains(query) ||
