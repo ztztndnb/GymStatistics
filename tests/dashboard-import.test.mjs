@@ -208,6 +208,14 @@ test("date swipes follow the finger and render the adjacent day while settling",
   assert.match(gymAppSource, /translationX = contentOffset/);
 });
 
+test("date swipe completion combines distance, release velocity, and direction", () => {
+  assert.match(gymAppSource, /VelocityTracker/);
+  assert.match(gymAppSource, /calculateVelocity\(\)\.x/);
+  assert.match(gymAppSource, /MIN_FLING_VELOCITY/);
+  assert.match(gymAppSource, /signedVelocity/);
+  assert.match(gymAppSource, /!isMovingBack/);
+});
+
 test("dashboard import detects duplicate dates before sending one request", async () => {
   const requests = [];
   const { elements, listeners, context } = createDashboard(async (url, options) => {

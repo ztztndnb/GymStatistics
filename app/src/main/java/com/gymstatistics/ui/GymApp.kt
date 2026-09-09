@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -130,6 +131,9 @@ import kotlin.math.roundToInt
 
 private enum class Screen { MAIN, HISTORY, SYNC }
 
+private const val MIN_SWIPE_DISTANCE = 100f
+private const val MIN_FLING_VELOCITY = 1000f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GymApp(viewModel: GymViewModel) {
@@ -145,6 +149,7 @@ fun GymApp(viewModel: GymViewModel) {
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var dragDirection by remember { mutableStateOf(0) }
+    var lastDragDirection by remember { mutableStateOf(0) }
     var isSettling by remember { mutableStateOf(false) }
     val settleOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -185,16 +190,25 @@ fun GymApp(viewModel: GymViewModel) {
                             modifier = Modifier
                                 .weight(1f)
                                 .pointerInput(Unit) {
+                                    val velocityTracker = VelocityTracker()
                                     detectHorizontalDragGestures(
                                         onDragStart = {
                                             dragOffset = 0f
                                             dragDirection = 0
+                                            lastDragDirection = 0
+                                            velocityTracker.resetTracking()
                                         },
                                         onDragEnd = {
                                             val direction = dragDirection
-                                            val commit = direction != 0 &&
-                                                ((direction > 0 && dragOffset < -100f) || (direction < 0 && dragOffset > 100f))
+                                            val signedDistance = -dragOffset * direction
+                                            val signedVelocity = -velocityTracker.calculateVelocity().x * direction
+                                            val isMovingBack = direction == 0 ||
+                                                lastDragDirection == direction ||
+                                                signedVelocity < -MIN_FLING_VELOCITY
+                                            val commit = !isMovingBack &&
+                                                (signedDistance >= MIN_SWIPE_DISTANCE || signedVelocity >= MIN_FLING_VELOCITY)
                                             val target = if (commit) -direction * size.width.toFloat() else 0f
+                                            velocityTracker.resetTracking()
                                             scope.launch {
                                                 isSettling = true
                                                 settleOffset.snapTo(dragOffset)
@@ -207,6 +221,7 @@ fun GymApp(viewModel: GymViewModel) {
                                             }
                                         },
                                         onDragCancel = {
+                                            velocityTracker.resetTracking()
                                             scope.launch {
                                                 isSettling = true
                                                 settleOffset.snapTo(dragOffset)
@@ -218,9 +233,11 @@ fun GymApp(viewModel: GymViewModel) {
                                             }
                                         },
                                     ) { change, amount ->
+                                        velocityTracker.addPosition(change.uptimeMillis, change.position)
                                         if (dragDirection == 0 && amount != 0f) {
                                             dragDirection = if (amount < 0f) 1 else -1
                                         }
+                                        if (amount != 0f) lastDragDirection = if (amount < 0f) -1 else 1
                                         dragOffset = (dragOffset + amount).coerceIn(-size.width.toFloat(), size.width.toFloat())
                                     }
                                 },
