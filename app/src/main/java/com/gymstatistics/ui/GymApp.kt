@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -68,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +82,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
@@ -114,6 +117,7 @@ import com.gymstatistics.data.buildSeriesByTotalCount
 import com.gymstatistics.data.fatigueWarningsFor
 import android.icu.text.Transliterator
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.coroutines.launch
 import java.text.Normalizer
 import java.time.LocalDate
 import java.time.YearMonth
@@ -139,7 +143,11 @@ fun GymApp(viewModel: GymViewModel) {
     var editingExerciseId by remember { mutableStateOf<String?>(null) }
     var prefillExercise by remember { mutableStateOf<ExerciseRecord?>(null) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
-    var dragAccum by remember { mutableFloatStateOf(0f) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragDirection by remember { mutableStateOf(0) }
+    var isSettling by remember { mutableStateOf(false) }
+    val settleOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
     AnimatedContent(
         targetState = screen,
@@ -170,52 +178,76 @@ fun GymApp(viewModel: GymViewModel) {
                         modifier = Modifier
                             .padding(padding)
                             .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectHorizontalDragGestures(
-                                    onDragStart = { dragAccum = 0f },
-                                    onDragEnd = {
-                                        if (dragAccum < -100f) selectedDate = selectedDate.plusDays(1)     // 左滑 → 下一天
-                                        else if (dragAccum > 100f) selectedDate = selectedDate.minusDays(1) // 右滑 → 上一天
-                                        dragAccum = 0f
-                                    },
-                                ) { _, amount -> dragAccum += amount }
-                            },
                     ) {
                         DatePickerHeader(selectedDate = selectedDate, onOpenCalendar = { showCalendar = true })
                         WeekDayBar(selectedDate = selectedDate, onSelect = { selectedDate = it })
-                        AnimatedContent(
-                            targetState = selectedDate,
-                            modifier = Modifier.weight(1f),
-                            transitionSpec = {
-                                if (targetState > initialState) {
-                                    (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
-                                } else {
-                                    (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
-                                }
-                            },
-                            label = "workout records",
-                        ) { date ->
-                            val session = state.data.sessions.firstOrNull { it.date == date.toString() }
-                            val dayExercises = session?.exercises ?: emptyList()
-                            if (dayExercises.isEmpty()) {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
-                                }
-                            } else {
-                                Column(modifier = Modifier.fillMaxSize()) {
-                                    session?.note?.takeIf { it.isNotBlank() }?.let { note ->
-                                        Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
-                                    }
-                                    LazyColumn(modifier = Modifier.weight(1f)) {
-                                        itemsIndexed(dayExercises, key = { index, exercise -> "${exercise.id.ifEmpty { exercise.name }}#$index" }) { _, ex ->
-                                            ActionItemCard(
-                                                exercise = ex,
-                                                onEdit = { editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
-                                                onDelete = { confirmDeleteId = ex.id },
-                                            )
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(1f)
+                                .pointerInput(Unit) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = {
+                                            dragOffset = 0f
+                                            dragDirection = 0
+                                        },
+                                        onDragEnd = {
+                                            val direction = dragDirection
+                                            val commit = direction != 0 &&
+                                                ((direction > 0 && dragOffset < -100f) || (direction < 0 && dragOffset > 100f))
+                                            val target = if (commit) -direction * size.width.toFloat() else 0f
+                                            scope.launch {
+                                                isSettling = true
+                                                settleOffset.snapTo(dragOffset)
+                                                settleOffset.animateTo(target, tween(220))
+                                                if (commit) selectedDate = selectedDate.plusDays(direction.toLong())
+                                                dragOffset = 0f
+                                                dragDirection = 0
+                                                settleOffset.snapTo(0f)
+                                                isSettling = false
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            scope.launch {
+                                                isSettling = true
+                                                settleOffset.snapTo(dragOffset)
+                                                settleOffset.animateTo(0f, tween(220))
+                                                dragOffset = 0f
+                                                dragDirection = 0
+                                                settleOffset.snapTo(0f)
+                                                isSettling = false
+                                            }
+                                        },
+                                    ) { change, amount ->
+                                        if (dragDirection == 0 && amount != 0f) {
+                                            dragDirection = if (amount < 0f) 1 else -1
                                         }
+                                        dragOffset = (dragOffset + amount).coerceIn(-size.width.toFloat(), size.width.toFloat())
                                     }
+                                },
+                        ) {
+                            val pageWidth = with(LocalDensity.current) { maxWidth.toPx() }
+                            val contentOffset = if (isSettling) settleOffset.value else dragOffset
+                            Box(Modifier.fillMaxSize()) {
+                                if (dragDirection != 0) {
+                                    WorkoutDayContent(
+                                        date = selectedDate.plusDays(dragDirection.toLong()),
+                                        sessions = state.data.sessions,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
+                                        onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                        onDelete = { confirmDeleteId = it },
+                                    )
                                 }
+                                WorkoutDayContent(
+                                    date = selectedDate,
+                                    sessions = state.data.sessions,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer { translationX = contentOffset },
+                                    onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                    onDelete = { confirmDeleteId = it },
+                                )
                             }
                         }
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -289,6 +321,38 @@ fun GymApp(viewModel: GymViewModel) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
+        }
+    }
+}
+
+@Composable
+private fun WorkoutDayContent(
+    date: LocalDate,
+    sessions: List<SessionRecord>,
+    modifier: Modifier = Modifier,
+    onEdit: (ExerciseRecord) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    val session = sessions.firstOrNull { it.date == date.toString() }
+    val dayExercises = session?.exercises ?: emptyList()
+    if (dayExercises.isEmpty()) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+        }
+    } else {
+        Column(modifier = modifier) {
+            session?.note?.takeIf { it.isNotBlank() }?.let { note ->
+                Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+            }
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                itemsIndexed(dayExercises, key = { index, exercise -> "${exercise.id.ifEmpty { exercise.name }}#$index" }) { _, ex ->
+                    ActionItemCard(
+                        exercise = ex,
+                        onEdit = { onEdit(ex) },
+                        onDelete = { onDelete(ex.id) },
+                    )
+                }
+            }
         }
     }
 }

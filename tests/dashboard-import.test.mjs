@@ -107,9 +107,9 @@ test("exercise notes are stored on and loaded from the individual exercise", () 
   assert.match(gymAppSource, /note = note\.trim\(\)/);
 });
 
-test("date changes keep the header fixed and animate the day content separately", () => {
+test("date changes keep the header fixed while the day content follows the swipe", () => {
   assert.match(gymAppSource, /DatePickerHeader\(selectedDate = selectedDate/);
-  assert.match(gymAppSource, /label = "workout records"/);
+  assert.match(gymAppSource, /BoxWithConstraints\(\s*modifier = Modifier\s*\.weight\(1f\)\s*\.pointerInput/);
   assert.match(gymAppSource, /animateDpAsState\(/);
   assert.match(gymAppSource, /animatedHighlightX/);
   assert.doesNotMatch(gymAppSource, /AnimatedContent\(\s*targetState = selectedDate,[\s\S]*label = "date"/);
@@ -198,6 +198,14 @@ test("muscle picker pans at the default scale", () => {
 
 test("add action dialog omits the destination date label", () => {
   assert.doesNotMatch(gymAppSource, /将添加到\s*[:：]/);
+});
+
+test("date swipes follow the finger and render the adjacent day while settling", () => {
+  assert.match(gymAppSource, /rememberCoroutineScope\(\)/);
+  assert.match(gymAppSource, /Animatable\(0f\)/);
+  assert.match(gymAppSource, /settleOffset\.animateTo\(/);
+  assert.match(gymAppSource, /selectedDate\.plusDays\(dragDirection\.toLong\(\)\)/);
+  assert.match(gymAppSource, /translationX = contentOffset/);
 });
 
 test("dashboard import detects duplicate dates before sending one request", async () => {
