@@ -17,6 +17,8 @@ const settingsSource = source("app/src/main/java/com/gymstatistics/data/AiSettin
 const viewModelSource = source("app/src/main/java/com/gymstatistics/GymViewModel.kt");
 const uiSource = source("app/src/main/java/com/gymstatistics/ui/GymApp.kt");
 const foodUiSource = source("app/src/main/java/com/gymstatistics/ui/FoodAnalysisScreen.kt");
+const cameraSource = source("app/src/main/java/com/gymstatistics/ui/FoodCameraView.kt");
+const iconsSource = source("app/src/main/java/com/gymstatistics/ui/FoodIcons.kt");
 const manifestSource = source("app/src/main/AndroidManifest.xml");
 const readmeSource = source("README.md");
 
@@ -62,11 +64,55 @@ test("food prompt handles meal photos and labels with per-100g output", () => {
   assert.match(promptSource, /二维码|条形码/);
 });
 
-test("food screen offers camera and gallery sources", () => {
-  assert.match(foodUiSource, /TakePicture/);
-  assert.match(foodUiSource, /GetContent/);
-  assert.match(foodUiSource, /从相册选择/);
-  assert.match(uiSource, /AI食物分析/);
+test("main menu replaces the food button with a camera icon beside history", () => {
+  assert.match(uiSource, /TextButton\(onClick = \{ historySelected = null; screen = Screen\.HISTORY \}\) \{ Text\("历史"\) \}/);
+  assert.match(uiSource, /IconButton\(\s*onClick = \{ screen = Screen\.FOOD \},/);
+  assert.match(uiSource, /FoodCameraIcon/);
+  assert.doesNotMatch(uiSource, /Text\("AI食物分析"\)/);
+});
+
+test("food screen opens an in-app camera with the requested corner actions", () => {
+  assert.match(foodUiSource, /FoodCameraView/);
+  assert.match(cameraSource, /CameraManager/);
+  assert.match(cameraSource, /SurfaceTextureListener/);
+  assert.match(cameraSource, /ImageReader/);
+  assert.match(cameraSource, /LENS_FACING_BACK/);
+  assert.match(foodUiSource, /ActivityResultContracts\.GetContent/);
+  assert.match(foodUiSource, /FoodPhotoIcon/);
+  assert.match(foodUiSource, /FoodKeyIcon/);
+  assert.match(foodUiSource, /FoodHistoryIcon/);
+  assert.match(foodUiSource, /CameraCornerAction\(CameraActionIcon\.GALLERY, "相册"/);
+  assert.match(foodUiSource, /onCapture =/);
+  assert.doesNotMatch(foodUiSource, /TakePicture|LifecycleCameraController|切换摄像头/);
+  assert.doesNotMatch(cameraSource, /LENS_FACING_FRONT|DEFAULT_FRONT_CAMERA|switchCamera/);
+  assert.match(manifestSource, /android\.permission\.CAMERA/);
+});
+
+test("food icons scale from the canvas origin so high-density screens show the full icon", () => {
+  assert.match(iconsSource, /scale\(scaleX = unit, scaleY = unit, pivot = Offset\.Zero\)/);
+  assert.doesNotMatch(iconsSource, /withTransform\(\{ scale\(scaleX = unit, scaleY = unit\) \}\)/);
+});
+
+test("camera serializes surface lifecycle before creating a capture session", () => {
+  assert.match(cameraSource, /activeSurfaceTexture/);
+  assert.match(cameraSource, /SurfaceTexture\? = null/);
+  assert.match(cameraSource, /synchronized\(cameraLock\)/);
+  assert.match(cameraSource, /if \(!started \|\| activeSurfaceTexture !== surface \|\| !textureView\.isAvailable\)/);
+  assert.match(cameraSource, /openCamera\(surface: SurfaceTexture, generation: Long\)/);
+  assert.match(cameraSource, /startPreview\(surface: SurfaceTexture, generation: Long\)/);
+  assert.match(cameraSource, /IllegalArgumentException/);
+});
+
+test("camera queues a tap until the capture session is ready", () => {
+  assert.match(cameraSource, /pendingCapture/);
+  assert.match(cameraSource, /submitPendingCapture/);
+  assert.match(cameraSource, /postDelayed/);
+  assert.match(cameraSource, /captureSession = session[\s\S]*submitPendingCapture/);
+});
+
+test("camera lifetime follows the screen instead of the AndroidView reference", () => {
+  assert.match(foodUiSource, /DisposableEffect\(Unit\)/);
+  assert.doesNotMatch(foodUiSource, /DisposableEffect\(cameraView\)/);
 });
 
 test("food result editing recalculates editable nutrients and saves separate history", () => {
@@ -83,8 +129,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.0 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 17/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.0"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.0\.apk/);
+test("release metadata is 1.3.4 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 21/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.4"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.4\.apk/);
 });

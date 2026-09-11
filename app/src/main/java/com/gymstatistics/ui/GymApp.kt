@@ -93,6 +93,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -174,7 +176,17 @@ fun GymApp(viewModel: GymViewModel) {
                     topBar = {
                         TopAppBar(
                             title = { Text("GymStatistics", fontWeight = FontWeight.Bold) },
-                            actions = { TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") } },
+                            actions = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") }
+                                    IconButton(
+                                        onClick = { screen = Screen.FOOD },
+                                        modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
+                                    ) {
+                                        FoodCameraIcon(tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            },
                         )
                     },
                     snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -279,10 +291,6 @@ fun GymApp(viewModel: GymViewModel) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { screen = Screen.SYNC }, modifier = Modifier.fillMaxWidth()) {
                                 Text("局域网同步")
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = { screen = Screen.FOOD }, modifier = Modifier.fillMaxWidth()) {
-                                Text("AI食物分析")
                             }
                         }
                     }

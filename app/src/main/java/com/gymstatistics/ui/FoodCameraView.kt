@@ -1,0 +1,503 @@
+package com.gymstatistics.ui
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.CaptureFailure
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.TotalCaptureResult
+import android.media.ImageReader
+import android.os.Handler
+import android.os.HandlerThread
+import android.util.Size
+import android.view.Surface
+import android.view.TextureView
+import android.widget.FrameLayout
+import androidx.core.content.ContextCompat
+import java.io.File
+import java.io.FileOutputStream
+
+class FoodCameraView(context: Context) : FrameLayout(context) {
+    private val cameraLock = Any()
+    private val textureView = TextureView(context)
+    private val cameraManager = context.getSystemService(CameraManager::class.java)
+    private var cameraDevice: CameraDevice? = null
+    private var captureSession: CameraCaptureSession? = null
+    private var imageReader: ImageReader? = null
+    private var previewSurface: Surface? = null
+    private var cameraCharacteristics: CameraCharacteristics? = null
+    private var cameraThread: HandlerThread? = null
+    private var cameraHandler: Handler? = null
+    private var pendingFile: File? = null
+    private var pendingSaved: ((File) -> Unit)? = null
+    private var pendingError: ((String) -> Unit)? = null
+    private var pendingCapture: File? = null
+    private var captureSubmitted = false
+    @Volatile private var started = false
+    @Volatile private var activeSurfaceTexture: SurfaceTexture? = null
+    private var surfaceGeneration = 0L
+    private var openingCamera = false
+
+    init {
+        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                val generation = synchronized(cameraLock) {
+                    if (activeSurfaceTexture !== surface) {
+                        activeSurfaceTexture = surface
+                        surfaceGeneration += 1
+                    }
+                    surfaceGeneration
+                }
+                if (started) {
+                    cameraHandler?.post { openCamera(surface, generation) }
+                }
+            }
+
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
+
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                synchronized(cameraLock) {
+                    if (activeSurfaceTexture === surface) {
+                        activeSurfaceTexture = null
+                        surfaceGeneration += 1
+                    }
+                }
+                val handler = cameraHandler
+                if (handler != null) {
+                    handler.post {
+                        synchronized(cameraLock) {
+                            closeCamera()
+                        }
+                        reopenCurrentSurface()
+                    }
+                } else {
+                    synchronized(cameraLock) {
+                        closeCamera()
+                    }
+                }
+                return true
+            }
+
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+        }
+    }
+
+    fun start() {
+        synchronized(cameraLock) {
+            if (started) return
+            started = true
+            openingCamera = false
+            cameraThread = HandlerThread("food-camera").also { it.start() }
+            cameraHandler = Handler(cameraThread!!.looper)
+        }
+
+        val surface = textureView.surfaceTexture
+        if (textureView.isAvailable && surface != null) {
+            val generation = synchronized(cameraLock) {
+                if (activeSurfaceTexture !== surface) {
+                    activeSurfaceTexture = surface
+                    surfaceGeneration += 1
+                }
+                surfaceGeneration
+            }
+            cameraHandler?.post { openCamera(surface, generation) }
+        }
+    }
+
+    fun stop() {
+        val handler: Handler?
+        val thread: HandlerThread?
+        synchronized(cameraLock) {
+            started = false
+            activeSurfaceTexture = null
+            surfaceGeneration += 1
+            openingCamera = false
+            pendingFile?.delete()
+            pendingFile = null
+            pendingSaved = null
+            pendingError = null
+            pendingCapture = null
+            captureSubmitted = false
+            handler = cameraHandler
+            thread = cameraThread
+            cameraHandler = null
+            cameraThread = null
+        }
+        handler?.post {
+            synchronized(cameraLock) {
+                closeCamera()
+            }
+        }
+        thread?.quitSafely()
+    }
+
+    fun takePicture(file: File, onSaved: (File) -> Unit, onError: (String) -> Unit) {
+        synchronized(cameraLock) {
+            val session = captureSession
+            val device = cameraDevice
+            val reader = imageReader
+            if (!started) {
+                onError("相机尚未准备好，请稍后再试")
+                return
+            }
+            if (pendingFile != null) {
+                onError("正在拍摄，请稍后再试")
+                return
+            }
+            pendingFile = file
+            pendingSaved = onSaved
+            pendingError = onError
+            pendingCapture = file
+            if (!submitPendingCapture()) {
+                schedulePendingCaptureTimeout(file)
+                reopenCurrentSurface()
+            }
+        }
+    }
+
+    private fun submitPendingCapture(): Boolean {
+        val file = pendingCapture ?: return false
+        val session = captureSession ?: return false
+        val device = cameraDevice ?: return false
+        val reader = imageReader ?: return false
+        try {
+            val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
+                addTarget(reader.surface)
+                set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                cameraCharacteristics?.let { characteristics ->
+                    set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation(characteristics))
+                }
+            }.build()
+            session.capture(request, object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureFailed(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    failure: CaptureFailure,
+                ) {
+                    notifyCaptureError("相机没有完成拍摄")
+                }
+
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult,
+                ) = Unit
+            }, cameraHandler)
+            pendingCapture = null
+            captureSubmitted = true
+            return true
+        } catch (exception: CameraAccessException) {
+            notifyCaptureError(exception.message ?: "无法访问相机")
+        } catch (exception: IllegalArgumentException) {
+            notifyCaptureError(exception.message ?: "相机暂时不可用")
+        }
+        return false
+    }
+
+    private fun schedulePendingCaptureTimeout(file: File) {
+        cameraHandler?.postDelayed({
+            val callback: ((String) -> Unit)?
+            synchronized(cameraLock) {
+                if (pendingCapture !== file || captureSubmitted) return@postDelayed
+                callback = pendingError
+                pendingCapture = null
+                pendingFile = null
+                pendingSaved = null
+                pendingError = null
+            }
+            file.delete()
+            post { callback?.invoke("相机尚未准备好，请稍后再试") }
+        }, 1_500L)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openCamera(surface: SurfaceTexture, generation: Long) {
+        val handler = cameraHandler ?: return
+        synchronized(cameraLock) {
+            if (!started || activeSurfaceTexture !== surface || !textureView.isAvailable) return
+            if (generation != surfaceGeneration || openingCamera || cameraDevice != null) return
+            openingCamera = true
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            synchronized(cameraLock) {
+                openingCamera = false
+            }
+            return
+        }
+
+        try {
+            val cameraId = findBackCamera() ?: run {
+                synchronized(cameraLock) {
+                    openingCamera = false
+                }
+                notifyCaptureError("未找到可用相机")
+                return
+            }
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            val jpegSize = map?.getOutputSizes(ImageFormat.JPEG)
+                ?.maxByOrNull { it.width.toLong() * it.height }
+                ?: Size(1920, 1080)
+            val reader = ImageReader.newInstance(jpegSize.width, jpegSize.height, ImageFormat.JPEG, 2).apply {
+                setOnImageAvailableListener({ availableReader ->
+                    val image = availableReader.acquireLatestImage() ?: return@setOnImageAvailableListener
+                    val pending = synchronized(cameraLock) {
+                        val result = Triple(pendingFile, pendingSaved, pendingError)
+                        pendingFile = null
+                        pendingSaved = null
+                        pendingError = null
+                        pendingCapture = null
+                        captureSubmitted = false
+                        result
+                    }
+                    val file = pending.first
+                    val saved = pending.second
+                    val error = pending.third
+                    var imageClosed = false
+                    try {
+                        if (file == null || saved == null) {
+                            image.close()
+                            imageClosed = true
+                            return@setOnImageAvailableListener
+                        }
+                        val buffer = image.planes.first().buffer
+                        val bytes = ByteArray(buffer.remaining())
+                        buffer.get(bytes)
+                        image.close()
+                        imageClosed = true
+                        FileOutputStream(file).use { it.write(bytes) }
+                        val savedFile = file
+                        val savedCallback = saved
+                        post { savedCallback(savedFile) }
+                    } catch (exception: Exception) {
+                        if (!imageClosed) image.close()
+                        file?.delete()
+                        post { error?.invoke(exception.message ?: "无法保存照片") }
+                    }
+                }, handler)
+            }
+            synchronized(cameraLock) {
+                if (!started || activeSurfaceTexture !== surface || !textureView.isAvailable) {
+                    reader.close()
+                    openingCamera = false
+                    return
+                }
+                if (generation != surfaceGeneration) {
+                    reader.close()
+                    openingCamera = false
+                    return
+                }
+                cameraCharacteristics = characteristics
+                imageReader?.close()
+                imageReader = reader
+            }
+            cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
+                override fun onOpened(camera: CameraDevice) {
+                    var valid = false
+                    var shouldReopen = false
+                    synchronized(cameraLock) {
+                        openingCamera = false
+                        if (!started || activeSurfaceTexture !== surface || !textureView.isAvailable) {
+                            closeCamera()
+                        } else if (generation != surfaceGeneration) {
+                            closeCamera()
+                        } else {
+                            cameraDevice = camera
+                            valid = true
+                        }
+                        shouldReopen = started && activeSurfaceTexture != null && textureView.isAvailable && !valid
+                    }
+                    if (!valid) {
+                        camera.close()
+                        if (shouldReopen) reopenCurrentSurface()
+                        return
+                    }
+                    startPreview(surface, generation)
+                }
+
+                override fun onDisconnected(camera: CameraDevice) {
+                    synchronized(cameraLock) {
+                        if (cameraDevice === camera) {
+                            cameraDevice = null
+                        }
+                        openingCamera = false
+                        captureSession?.close()
+                        captureSession = null
+                        imageReader?.close()
+                        imageReader = null
+                        previewSurface?.release()
+                        previewSurface = null
+                    }
+                    camera.close()
+                }
+
+                override fun onError(camera: CameraDevice, error: Int) {
+                    synchronized(cameraLock) {
+                        if (cameraDevice === camera) {
+                            cameraDevice = null
+                        }
+                        openingCamera = false
+                        captureSession?.close()
+                        captureSession = null
+                        imageReader?.close()
+                        imageReader = null
+                        previewSurface?.release()
+                        previewSurface = null
+                    }
+                    camera.close()
+                    notifyCaptureError("相机启动失败")
+                }
+            }, handler)
+        } catch (exception: CameraAccessException) {
+            synchronized(cameraLock) {
+                openingCamera = false
+                closeCamera()
+            }
+            notifyCaptureError(exception.message ?: "无法启动相机")
+        } catch (exception: IllegalArgumentException) {
+            synchronized(cameraLock) {
+                openingCamera = false
+                closeCamera()
+            }
+            notifyCaptureError(exception.message ?: "无法启动相机")
+        }
+    }
+
+    private fun startPreview(surface: SurfaceTexture, generation: Long) {
+        synchronized(cameraLock) {
+            if (!started || activeSurfaceTexture !== surface || !textureView.isAvailable) {
+                closeCamera()
+                return
+            }
+            if (generation != surfaceGeneration) {
+                closeCamera()
+                return
+            }
+            val device = cameraDevice ?: return
+            val reader = imageReader ?: return
+            val size = cameraCharacteristics
+                ?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                ?.getOutputSizes(SurfaceTexture::class.java)
+                ?.maxByOrNull { it.width.toLong() * it.height }
+                ?: Size(1920, 1080)
+            try {
+                surface.setDefaultBufferSize(size.width, size.height)
+                val outputSurface = Surface(surface)
+                previewSurface = outputSurface
+                val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                    addTarget(outputSurface)
+                    set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                }.build()
+                device.createCaptureSession(
+                    listOf(outputSurface, reader.surface),
+                    object : CameraCaptureSession.StateCallback() {
+                        override fun onConfigured(session: CameraCaptureSession) {
+                            synchronized(cameraLock) {
+                                if (!started || activeSurfaceTexture !== surface || !textureView.isAvailable) {
+                                    session.close()
+                                    return
+                                }
+                                if (generation != surfaceGeneration) {
+                                    session.close()
+                                    return
+                                }
+                                try {
+                                    captureSession = session
+                                    session.setRepeatingRequest(request, null, cameraHandler)
+                                    submitPendingCapture()
+                                } catch (exception: CameraAccessException) {
+                                    closeCamera()
+                                    notifyCaptureError(exception.message ?: "无法启动相机预览")
+                                } catch (exception: IllegalArgumentException) {
+                                    closeCamera()
+                                    notifyCaptureError(exception.message ?: "无法启动相机预览")
+                                }
+                            }
+                        }
+
+                        override fun onConfigureFailed(session: CameraCaptureSession) {
+                            synchronized(cameraLock) {
+                                session.close()
+                                if (captureSession === session) {
+                                    captureSession = null
+                                }
+                                notifyCaptureError("相机预览启动失败")
+                            }
+                        }
+                    },
+                    cameraHandler,
+                )
+            } catch (exception: CameraAccessException) {
+                closeCamera()
+                notifyCaptureError(exception.message ?: "无法启动相机预览")
+            } catch (exception: IllegalArgumentException) {
+                closeCamera()
+                notifyCaptureError(exception.message ?: "无法启动相机预览")
+            }
+        }
+    }
+
+    private fun reopenCurrentSurface() {
+        val handler = cameraHandler ?: return
+        val surface: SurfaceTexture
+        val generation: Long
+        synchronized(cameraLock) {
+            if (!started || activeSurfaceTexture == null || !textureView.isAvailable) return
+            surface = activeSurfaceTexture ?: return
+            generation = surfaceGeneration
+        }
+        handler.post { openCamera(surface, generation) }
+    }
+
+    private fun closeCamera() {
+        captureSession?.close()
+        captureSession = null
+        cameraDevice?.close()
+        cameraDevice = null
+        imageReader?.close()
+        imageReader = null
+        previewSurface?.release()
+        previewSurface = null
+        cameraCharacteristics = null
+    }
+
+    private fun findBackCamera(): String? = cameraManager.cameraIdList.firstOrNull { id ->
+        cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK
+    }
+
+    private fun notifyCaptureError(message: String) {
+        val error = synchronized(cameraLock) {
+            val callback = pendingError
+            pendingFile?.delete()
+            pendingFile = null
+            pendingSaved = null
+            pendingError = null
+            pendingCapture = null
+            captureSubmitted = false
+            callback
+        }
+        post { error?.invoke(message) }
+    }
+
+    private fun jpegOrientation(characteristics: CameraCharacteristics): Int {
+        val rotation = (context as? android.app.Activity)?.windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0
+        val degrees = when (rotation) {
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+        val sensor = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+        return (sensor - degrees + 360) % 360
+    }
+}
