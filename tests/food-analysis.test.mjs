@@ -116,11 +116,26 @@ test("camera lifetime follows the screen instead of the AndroidView reference", 
 });
 
 test("camera preview preserves its aspect ratio and uses the themed fill color", () => {
-  assert.match(cameraSource, /setRectToRect/);
-  assert.match(cameraSource, /ScaleToFit\.CENTER/);
+  assert.match(cameraSource, /calculatePreviewScale/);
+  assert.match(cameraSource, /setScale/);
+  assert.doesNotMatch(cameraSource, /setRectToRect/);
   assert.match(cameraSource, /setTransform/);
   assert.match(foodUiSource, /MaterialTheme\.colorScheme\.surface/);
   assert.match(foodUiSource, /setBackgroundColor\(letterboxColor\)/);
+});
+
+test("camera controls stay visible on light previews and use larger touch targets", () => {
+  assert.match(foodUiSource, /val cameraControlColor = MaterialTheme\.colorScheme\.primary/);
+  assert.match(foodUiSource, /val cameraControlContentColor = MaterialTheme\.colorScheme\.onPrimary/);
+  assert.match(foodUiSource, /\.size\(56\.dp\)[\s\S]*\.background\(cameraControlColor\)/);
+  assert.match(foodUiSource, /\.size\(84\.dp\)[\s\S]*\.background\(cameraControlColor\)/);
+  assert.match(foodUiSource, /CameraCornerAction\([\s\S]*backgroundColor = cameraControlColor/);
+});
+
+test("photo confirmation offers left and right rotation before analysis", () => {
+  assert.match(foodUiSource, /向左旋转/);
+  assert.match(foodUiSource, /向右旋转/);
+  assert.match(foodUiSource, /rotateFoodPhoto/);
 });
 
 test("camera entry clears stale food analysis state", () => {
@@ -149,8 +164,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.5 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 22/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.5"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.5\.apk/);
+test("release metadata is 1.3.6 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 23/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.6"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.6\.apk/);
 });

@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.graphics.Matrix
-import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
@@ -27,6 +26,26 @@ import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.FileOutputStream
+
+internal data class PreviewScale(val x: Float, val y: Float)
+
+internal fun calculatePreviewScale(
+    viewWidth: Int,
+    viewHeight: Int,
+    bufferWidth: Int,
+    bufferHeight: Int,
+): PreviewScale {
+    val viewAspect = viewWidth.toFloat() / viewHeight
+    val orientationsDiffer = (viewWidth > viewHeight) != (bufferWidth > bufferHeight)
+    val displayedBufferWidth = if (orientationsDiffer) bufferHeight else bufferWidth
+    val displayedBufferHeight = if (orientationsDiffer) bufferWidth else bufferHeight
+    val bufferAspect = displayedBufferWidth.toFloat() / displayedBufferHeight
+    return if (bufferAspect > viewAspect) {
+        PreviewScale(x = 1f, y = viewAspect / bufferAspect)
+    } else {
+        PreviewScale(x = bufferAspect / viewAspect, y = 1f)
+    }
+}
 
 class FoodCameraView(context: Context) : FrameLayout(context) {
     private val cameraLock = Any()
@@ -485,13 +504,12 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
     }
 
     private fun applyPreviewTransform(bufferSize: Size) {
-        val viewWidth = textureView.width.toFloat()
-        val viewHeight = textureView.height.toFloat()
-        if (viewWidth <= 0f || viewHeight <= 0f || bufferSize.width <= 0 || bufferSize.height <= 0) return
-        val source = RectF(0f, 0f, bufferSize.width.toFloat(), bufferSize.height.toFloat())
-        val target = RectF(0f, 0f, viewWidth, viewHeight)
+        val viewWidth = textureView.width
+        val viewHeight = textureView.height
+        if (viewWidth <= 0 || viewHeight <= 0 || bufferSize.width <= 0 || bufferSize.height <= 0) return
+        val scale = calculatePreviewScale(viewWidth, viewHeight, bufferSize.width, bufferSize.height)
         val transform = Matrix().apply {
-            setRectToRect(source, target, Matrix.ScaleToFit.CENTER)
+            setScale(scale.x, scale.y, viewWidth / 2f, viewHeight / 2f)
         }
         textureView.setTransform(transform)
     }

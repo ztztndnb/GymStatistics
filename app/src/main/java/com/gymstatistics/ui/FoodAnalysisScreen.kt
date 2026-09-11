@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,9 +74,18 @@ import com.gymstatistics.data.FoodAnalysisCalculator
 import com.gymstatistics.data.FoodAnalysisItem
 import com.gymstatistics.data.FoodAnalysisRecord
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class FoodPage { HISTORY }
+
+internal enum class FoodPhotoRotation(val degrees: Float) {
+    LEFT(-90f),
+    RIGHT(90f),
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -320,6 +331,8 @@ private fun FoodCameraSurface(
 ) {
     var cameraView by remember { mutableStateOf<FoodCameraView?>(null) }
     val letterboxColor = MaterialTheme.colorScheme.surface.toArgb()
+    val cameraControlColor = MaterialTheme.colorScheme.primary
+    val cameraControlContentColor = MaterialTheme.colorScheme.onPrimary
     DisposableEffect(Unit) {
         onDispose { cameraView?.stop() }
     }
@@ -352,18 +365,31 @@ private fun FoodCameraSurface(
 
         IconButton(
             onClick = onBack,
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(cameraControlColor),
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "返回",
+                tint = cameraControlContentColor,
+                modifier = Modifier.size(28.dp),
+            )
         }
         IconButton(
             onClick = onSettings,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(8.dp)
+                .padding(12.dp)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(cameraControlColor)
                 .semantics { contentDescription = "配置 API Key" },
         ) {
-            FoodKeyIcon(tint = Color.White)
+            FoodKeyIcon(tint = cameraControlContentColor, modifier = Modifier.size(30.dp))
         }
 
         Row(
@@ -374,27 +400,33 @@ private fun FoodCameraSurface(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CameraCornerAction(CameraActionIcon.GALLERY, "相册", onGallery)
+            CameraCornerAction(CameraActionIcon.GALLERY, "相册", onGallery,
+                backgroundColor = cameraControlColor,
+                contentColor = cameraControlContentColor,
+            )
             IconButton(
                 onClick = { onCapture(cameraView) },
                 enabled = !loading,
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(84.dp)
                     .clip(CircleShape)
-                    .background(Color.White)
+                    .background(cameraControlColor)
                     .semantics { contentDescription = "拍摄照片" },
             ) {
                 Box(
                     Modifier
-                        .size(56.dp)
+                        .size(66.dp)
                         .clip(CircleShape)
-                        .background(Color.Black)
-                        .padding(4.dp)
+                        .background(cameraControlContentColor)
+                        .padding(5.dp)
                         .clip(CircleShape)
-                        .background(Color.White),
+                        .background(cameraControlColor),
                 )
             }
-            CameraCornerAction(CameraActionIcon.HISTORY, "历史", onHistory)
+            CameraCornerAction(CameraActionIcon.HISTORY, "历史", onHistory,
+                backgroundColor = cameraControlColor,
+                contentColor = cameraControlContentColor,
+            )
         }
 
         if (loading) {
@@ -437,7 +469,21 @@ private fun FoodPhotoConfirmation(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap = remember(photoFile) { decodeFoodPhoto(photoFile) }
+    var photoRevision by remember(photoFile) { mutableStateOf(0) }
+    var rotating by remember(photoFile) { mutableStateOf(false) }
+    var rotationError by remember(photoFile) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val bitmap = remember(photoFile, photoRevision) { decodeFoodPhoto(photoFile) }
+    fun rotate(direction: FoodPhotoRotation) {
+        if (rotating || loading || bitmap == null) return
+        rotating = true
+        rotationError = null
+        scope.launch {
+            val rotated = withContext(Dispatchers.IO) { rotateFoodPhoto(photoFile, direction) }
+            if (rotated) photoRevision += 1 else rotationError = "旋转照片失败，请重试"
+            rotating = false
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -471,9 +517,29 @@ private fun FoodPhotoConfirmation(
                 Text("照片加载失败，请重新拍摄", color = MaterialTheme.colorScheme.error)
             }
         }
-        if (!error.isNullOrBlank()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedButton(
+                onClick = { rotate(FoodPhotoRotation.LEFT) },
+                enabled = bitmap != null && !loading && !rotating,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("向左旋转")
+            }
+            OutlinedButton(
+                onClick = { rotate(FoodPhotoRotation.RIGHT) },
+                enabled = bitmap != null && !loading && !rotating,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("向右旋转")
+            }
+        }
+        val visibleError = rotationError ?: error
+        if (!visibleError.isNullOrBlank()) {
             Text(
-                error,
+                visibleError,
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -492,10 +558,10 @@ private fun FoodPhotoConfirmation(
             }
             Button(
                 onClick = onConfirm,
-                enabled = bitmap != null && !loading,
+                enabled = bitmap != null && !loading && !rotating,
                 modifier = Modifier.weight(1f),
             ) {
-                Text(if (loading) "正在分析…" else "确认并分析")
+                Text(if (loading) "正在分析…" else if (rotating) "正在旋转…" else "确认并分析")
             }
         }
     }
@@ -515,6 +581,33 @@ private fun decodeFoodPhoto(file: File): Bitmap? {
     )
 }
 
+private fun rotateFoodPhoto(file: File, direction: FoodPhotoRotation): Boolean {
+    val bitmap = decodeFoodPhoto(file) ?: return false
+    val rotated = Bitmap.createBitmap(
+        bitmap,
+        0,
+        0,
+        bitmap.width,
+        bitmap.height,
+        Matrix().apply { postRotate(direction.degrees) },
+        true,
+    )
+    val temporary = File(file.parentFile, "${file.name}.rotating")
+    return try {
+        FileOutputStream(temporary).use { output ->
+            check(rotated.compress(Bitmap.CompressFormat.JPEG, 95, output))
+        }
+        temporary.copyTo(file, overwrite = true)
+        true
+    } catch (_: Exception) {
+        false
+    } finally {
+        temporary.delete()
+        if (rotated !== bitmap) rotated.recycle()
+        bitmap.recycle()
+    }
+}
+
 private enum class CameraActionIcon { GALLERY, HISTORY }
 
 @Composable
@@ -522,19 +615,24 @@ private fun CameraCornerAction(
     icon: CameraActionIcon,
     label: String,
     onClick: () -> Unit,
+    backgroundColor: Color,
+    contentColor: Color,
 ) {
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .size(76.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         when (icon) {
-            CameraActionIcon.GALLERY -> FoodPhotoIcon(tint = Color.White)
-            CameraActionIcon.HISTORY -> FoodHistoryIcon(tint = Color.White)
+            CameraActionIcon.GALLERY -> FoodPhotoIcon(tint = contentColor, modifier = Modifier.size(32.dp))
+            CameraActionIcon.HISTORY -> FoodHistoryIcon(tint = contentColor, modifier = Modifier.size(32.dp))
         }
-        Text(label, color = Color.White, fontSize = 12.sp)
+        Text(label, color = contentColor, fontSize = 13.sp)
     }
 }
 
