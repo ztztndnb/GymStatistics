@@ -41,9 +41,9 @@ internal fun calculatePreviewScale(
     val displayedBufferHeight = if (orientationsDiffer) bufferWidth else bufferHeight
     val bufferAspect = displayedBufferWidth.toFloat() / displayedBufferHeight
     return if (bufferAspect > viewAspect) {
-        PreviewScale(x = 1f, y = viewAspect / bufferAspect)
-    } else {
         PreviewScale(x = bufferAspect / viewAspect, y = 1f)
+    } else {
+        PreviewScale(x = 1f, y = viewAspect / bufferAspect)
     }
 }
 

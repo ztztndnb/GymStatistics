@@ -5,7 +5,7 @@ import org.junit.Test
 
 class CameraImageTransformTest {
     @Test
-    fun portraitPreviewFitsWidthWithoutAbsolutePixelShrinking() {
+    fun portraitPreviewFillsHeightAndCropsTheSides() {
         val scale = calculatePreviewScale(
             viewWidth = 1080,
             viewHeight = 2376,
@@ -13,12 +13,12 @@ class CameraImageTransformTest {
             bufferHeight = 3000,
         )
 
-        assertEquals(1f, scale.x, 0.0001f)
-        assertEquals(0.6061f, scale.y, 0.0001f)
+        assertEquals(1.65f, scale.x, 0.0001f)
+        assertEquals(1f, scale.y, 0.0001f)
     }
 
     @Test
-    fun landscapePreviewFitsHeightAndRemainsCentered() {
+    fun landscapePreviewFillsWidthAndCropsTopAndBottom() {
         val scale = calculatePreviewScale(
             viewWidth = 2400,
             viewHeight = 1080,
@@ -26,8 +26,8 @@ class CameraImageTransformTest {
             bufferHeight = 1080,
         )
 
-        assertEquals(0.8f, scale.x, 0.0001f)
-        assertEquals(1f, scale.y, 0.0001f)
+        assertEquals(1f, scale.x, 0.0001f)
+        assertEquals(1.25f, scale.y, 0.0001f)
     }
 
     @Test

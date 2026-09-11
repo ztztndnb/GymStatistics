@@ -110,12 +110,15 @@ test("camera queues a tap until the capture session is ready", () => {
   assert.match(cameraSource, /captureSession = session[\s\S]*submitPendingCapture/);
 });
 
-test("camera lifetime follows the screen instead of the AndroidView reference", () => {
-  assert.match(foodUiSource, /DisposableEffect\(Unit\)/);
+test("camera releases on pause and restarts when the app resumes", () => {
+  assert.match(foodUiSource, /LifecycleEventObserver/);
+  assert.match(foodUiSource, /Lifecycle\.Event\.ON_PAUSE -> cameraView\?\.stop\(\)/);
+  assert.match(foodUiSource, /Lifecycle\.Event\.ON_RESUME -> cameraView\?\.start\(\)/);
+  assert.match(foodUiSource, /removeObserver/);
   assert.doesNotMatch(foodUiSource, /DisposableEffect\(cameraView\)/);
 });
 
-test("camera preview preserves its aspect ratio and uses the themed fill color", () => {
+test("camera preview preserves its aspect ratio with centered cropping", () => {
   assert.match(cameraSource, /calculatePreviewScale/);
   assert.match(cameraSource, /setScale/);
   assert.doesNotMatch(cameraSource, /setRectToRect/);
@@ -164,8 +167,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.6 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 23/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.6"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.6\.apk/);
+test("release metadata is 1.3.7 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 24/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.7"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.7\.apk/);
 });
