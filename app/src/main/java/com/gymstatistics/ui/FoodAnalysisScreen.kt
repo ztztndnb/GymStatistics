@@ -69,6 +69,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.FoodAnalysisCalculator
 import com.gymstatistics.data.FoodAnalysisItem
@@ -330,11 +333,23 @@ private fun FoodCameraSurface(
     modifier: Modifier = Modifier,
 ) {
     var cameraView by remember { mutableStateOf<FoodCameraView?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val letterboxColor = MaterialTheme.colorScheme.surface.toArgb()
     val cameraControlColor = MaterialTheme.colorScheme.primary
     val cameraControlContentColor = MaterialTheme.colorScheme.onPrimary
-    DisposableEffect(Unit) {
-        onDispose { cameraView?.stop() }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> cameraView?.stop()
+                Lifecycle.Event.ON_RESUME -> cameraView?.start()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            cameraView?.stop()
+        }
     }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         if (cameraPermissionGranted) {
@@ -343,7 +358,9 @@ private fun FoodCameraSurface(
                     FoodCameraView(it).also { view ->
                         view.setBackgroundColor(letterboxColor)
                         cameraView = view
-                        view.start()
+                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            view.start()
+                        }
                     }
                 },
                 update = {
