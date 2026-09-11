@@ -115,6 +115,26 @@ test("camera lifetime follows the screen instead of the AndroidView reference", 
   assert.doesNotMatch(foodUiSource, /DisposableEffect\(cameraView\)/);
 });
 
+test("camera preview preserves its aspect ratio and uses the themed fill color", () => {
+  assert.match(cameraSource, /setRectToRect/);
+  assert.match(cameraSource, /ScaleToFit\.CENTER/);
+  assert.match(cameraSource, /setTransform/);
+  assert.match(foodUiSource, /MaterialTheme\.colorScheme\.surface/);
+  assert.match(foodUiSource, /setBackgroundColor\(letterboxColor\)/);
+});
+
+test("camera entry clears stale food analysis state", () => {
+  assert.match(foodUiSource, /LaunchedEffect\(Unit\) \{\s*viewModel\.clearFoodAnalysisResult\(\)/);
+});
+
+test("captured camera photos require confirmation before DeepSeek analysis", () => {
+  assert.match(foodUiSource, /capturedPhoto/);
+  assert.match(foodUiSource, /FoodPhotoConfirmation/);
+  assert.match(foodUiSource, /确认并分析/);
+  assert.match(foodUiSource, /重新拍摄/);
+  assert.doesNotMatch(foodUiSource, /onSaved = \{\s*viewModel\.analyzeFoodImage/);
+});
+
 test("food result editing recalculates editable nutrients and saves separate history", () => {
   assert.match(foodUiSource, /FoodAnalysisEditor/);
   assert.match(foodUiSource, /重量 \(g\)/);
@@ -129,8 +149,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.4 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 21/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.4"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.4\.apk/);
+test("release metadata is 1.3.5 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 22/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.5"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.5\.apk/);
 });
