@@ -1,12 +1,15 @@
 package com.gymstatistics.ui
 
+import android.Manifest
 import android.content.Context
-import android.net.Uri
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,12 +17,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -31,13 +35,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +49,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
+import androidx.core.content.ContextCompat
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.FoodAnalysisCalculator
 import com.gymstatistics.data.FoodAnalysisItem
@@ -57,33 +67,35 @@ import com.gymstatistics.data.FoodAnalysisRecord
 import java.io.File
 import java.util.Locale
 
-private enum class FoodPage { ENTRY, HISTORY }
+private enum class FoodPage { HISTORY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val state = viewModel.uiState
-    var page by remember { mutableStateOf(FoodPage.ENTRY) }
+    var page by remember { mutableStateOf<FoodPage?>(null) }
     var draft by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var showKeyDialog by remember { mutableStateOf(false) }
     var keyInput by remember { mutableStateOf("") }
     var deleteId by remember { mutableStateOf<String?>(null) }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var captureError by remember { mutableStateOf<String?>(null) }
+    var cameraPermissionGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        cameraPermissionGranted = it
+    }
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) viewModel.analyzeFoodImage(uri)
+    }
 
+    LaunchedEffect(Unit) {
+        if (!cameraPermissionGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
+    }
     LaunchedEffect(state.foodAnalysisResult?.id) {
         state.foodAnalysisResult?.let { draft = it }
     }
-
-    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let(viewModel::analyzeFoodImage)
-    }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val uri = cameraUri
-        if (success && uri != null) viewModel.analyzeFoodImage(uri)
-        cameraUri = null
-    }
-
     BackHandler {
         when {
             showKeyDialog -> showKeyDialog = false
@@ -91,30 +103,32 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 draft = null
                 viewModel.clearFoodAnalysisResult()
             }
-            page == FoodPage.HISTORY -> page = FoodPage.ENTRY
+            page != null -> page = null
             else -> onBack()
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (page == FoodPage.HISTORY) "食物分析历史" else "AI食物分析") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        when {
-                            draft != null -> {
-                                draft = null
-                                viewModel.clearFoodAnalysisResult()
+            if (draft != null || page != null) {
+                TopAppBar(
+                    title = { Text(if (page != null) "食物分析历史" else "分析结果") },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            when {
+                                draft != null -> {
+                                    draft = null
+                                    viewModel.clearFoodAnalysisResult()
+                                }
+                                page != null -> page = null
+                                else -> onBack()
                             }
-                            page == FoodPage.HISTORY -> page = FoodPage.ENTRY
-                            else -> onBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
+                    },
+                )
+            }
         },
     ) { padding ->
         when {
@@ -127,25 +141,49 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 },
                 modifier = Modifier.padding(padding),
             )
-            page == FoodPage.HISTORY -> FoodAnalysisHistory(
+            page != null -> FoodAnalysisHistory(
                 records = state.foodAnalyses,
                 onOpen = { draft = it },
                 onDelete = { deleteId = it },
                 modifier = Modifier.padding(padding),
             )
-            else -> FoodAnalysisEntry(
-                keyConfigured = state.deepSeekKeyConfigured,
+            else -> FoodCameraSurface(
+                cameraPermissionGranted = cameraPermissionGranted,
                 loading = state.foodAnalysisLoading,
-                error = state.foodAnalysisError,
-                onCamera = {
-                    val uri = createFoodCameraUri(context)
-                    cameraUri = uri
-                    cameraLauncher.launch(uri)
-                },
-                onGallery = { galleryPicker.launch("image/*") },
+                error = captureError ?: state.foodAnalysisError,
+                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                onBack = onBack,
                 onSettings = {
                     keyInput = ""
                     showKeyDialog = true
+                },
+                onGallery = {
+                    captureError = null
+                    if (state.deepSeekKeyConfigured) galleryPicker.launch("image/*") else showKeyDialog = true
+                },
+                onCapture = { cameraView ->
+                    if (!cameraPermissionGranted) {
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    } else if (!state.deepSeekKeyConfigured) {
+                        showKeyDialog = true
+                    } else if (cameraView == null) {
+                        captureError = "相机正在启动，请稍后再试"
+                    } else if (!state.foodAnalysisLoading) {
+                        captureError = null
+                        val file = createFoodCameraFile(context)
+                        cameraView.takePicture(
+                            file,
+                            onSaved = {
+                                viewModel.analyzeFoodImage(
+                                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file),
+                                )
+                            },
+                            onError = {
+                                file.delete()
+                                captureError = "拍照失败：$it"
+                            },
+                        )
+                    }
                 },
                 onHistory = { page = FoodPage.HISTORY },
                 modifier = Modifier.padding(padding),
@@ -208,54 +246,143 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun FoodAnalysisEntry(
-    keyConfigured: Boolean,
+private fun FoodCameraSurface(
+    cameraPermissionGranted: Boolean,
     loading: Boolean,
     error: String?,
-    onCamera: () -> Unit,
-    onGallery: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onBack: () -> Unit,
     onSettings: () -> Unit,
+    onGallery: () -> Unit,
+    onCapture: (FoodCameraView?) -> Unit,
     onHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text("用照片估算食物热量", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "支持食物照片、配料表和营养成分表。识别结果会按每100g展示，可手动修改。",
-                    color = MaterialTheme.colorScheme.outline,
-                    fontSize = 13.sp,
-                )
+    var cameraView by remember { mutableStateOf<FoodCameraView?>(null) }
+    DisposableEffect(Unit) {
+        onDispose { cameraView?.stop() }
+    }
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        if (cameraPermissionGranted) {
+            AndroidView(
+                factory = {
+                    FoodCameraView(it).also { view ->
+                        cameraView = view
+                        view.start()
+                    }
+                },
+                update = { cameraView = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Column(
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("需要相机权限才能拍摄食物照片", color = Color.White)
+                TextButton(onClick = onRequestPermission) { Text("允许相机权限") }
             }
         }
-        OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) {
-            Text(if (keyConfigured) "DeepSeek API 已配置" else "配置 DeepSeek API Key")
+
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
         }
-        Button(onClick = onCamera, enabled = !loading && keyConfigured, modifier = Modifier.fillMaxWidth()) {
-            Text("拍摄照片")
+        IconButton(
+            onClick = onSettings,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .semantics { contentDescription = "配置 API Key" },
+        ) {
+            FoodKeyIcon(tint = Color.White)
         }
-        OutlinedButton(onClick = onGallery, enabled = !loading && keyConfigured, modifier = Modifier.fillMaxWidth()) {
-            Text("从相册选择")
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CameraCornerAction(CameraActionIcon.GALLERY, "相册", onGallery)
+            IconButton(
+                onClick = { onCapture(cameraView) },
+                enabled = !loading,
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .semantics { contentDescription = "拍摄照片" },
+            ) {
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White),
+                )
+            }
+            CameraCornerAction(CameraActionIcon.HISTORY, "历史", onHistory)
         }
-        OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("食物分析历史") }
-        if (!keyConfigured) {
-            Text("请先配置 API Key 后再开始分析。", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-        }
+
         if (loading) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator()
-                Spacer(Modifier.width(10.dp))
-                Text("正在分析图片…")
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Text("正在分析图片…", color = Color.White)
+                }
             }
         }
         if (!error.isNullOrBlank()) {
-            Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+            Text(
+                error,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xCC8B0000))
+                    .padding(12.dp),
+                fontSize = 13.sp,
+            )
         }
+    }
+}
+
+private enum class CameraActionIcon { GALLERY, HISTORY }
+
+@Composable
+private fun CameraCornerAction(
+    icon: CameraActionIcon,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        when (icon) {
+            CameraActionIcon.GALLERY -> FoodPhotoIcon(tint = Color.White)
+            CameraActionIcon.HISTORY -> FoodHistoryIcon(tint = Color.White)
+        }
+        Text(label, color = Color.White, fontSize = 12.sp)
     }
 }
 
@@ -374,10 +501,7 @@ private fun FoodAnalysisHistory(
     }
 }
 
-private fun createFoodCameraUri(context: Context): Uri {
-    val file = File.createTempFile("food-analysis-", ".jpg", context.cacheDir)
-    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-}
+private fun createFoodCameraFile(context: Context): File = File.createTempFile("food-analysis-", ".jpg", context.cacheDir)
 
 private fun formatNumber(value: Double?): String = value?.let {
     String.format(Locale.US, "%.2f", it).trimEnd('0').trimEnd('.')
