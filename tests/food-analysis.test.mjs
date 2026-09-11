@@ -18,7 +18,6 @@ const viewModelSource = source("app/src/main/java/com/gymstatistics/GymViewModel
 const uiSource = source("app/src/main/java/com/gymstatistics/ui/GymApp.kt");
 const foodUiSource = source("app/src/main/java/com/gymstatistics/ui/FoodAnalysisScreen.kt");
 const cameraSource = source("app/src/main/java/com/gymstatistics/ui/FoodCameraView.kt");
-const iconsSource = source("app/src/main/java/com/gymstatistics/ui/FoodIcons.kt");
 const manifestSource = source("app/src/main/AndroidManifest.xml");
 const readmeSource = source("README.md");
 
@@ -67,7 +66,7 @@ test("food prompt handles meal photos and labels with per-100g output", () => {
 test("main menu replaces the food button with a camera icon beside history", () => {
   assert.match(uiSource, /TextButton\(onClick = \{ historySelected = null; screen = Screen\.HISTORY \}\) \{ Text\("历史"\) \}/);
   assert.match(uiSource, /IconButton\(\s*onClick = \{ screen = Screen\.FOOD \},/);
-  assert.match(uiSource, /FoodCameraIcon/);
+  assert.match(uiSource, /Icons\.Rounded\.PhotoCamera/);
   assert.doesNotMatch(uiSource, /Text\("AI食物分析"\)/);
 });
 
@@ -78,9 +77,9 @@ test("food screen opens an in-app camera with the requested corner actions", () 
   assert.match(cameraSource, /ImageReader/);
   assert.match(cameraSource, /LENS_FACING_BACK/);
   assert.match(foodUiSource, /ActivityResultContracts\.GetContent/);
-  assert.match(foodUiSource, /FoodPhotoIcon/);
-  assert.match(foodUiSource, /FoodKeyIcon/);
-  assert.match(foodUiSource, /FoodHistoryIcon/);
+  assert.match(foodUiSource, /Icons\.Rounded\.Key/);
+  assert.match(foodUiSource, /Icons\.Rounded\.PhotoLibrary/);
+  assert.match(foodUiSource, /Icons\.Rounded\.History/);
   assert.match(foodUiSource, /CameraCornerAction\(CameraActionIcon\.GALLERY, "相册"/);
   assert.match(foodUiSource, /onCapture =/);
   assert.doesNotMatch(foodUiSource, /TakePicture|LifecycleCameraController|切换摄像头/);
@@ -88,9 +87,10 @@ test("food screen opens an in-app camera with the requested corner actions", () 
   assert.match(manifestSource, /android\.permission\.CAMERA/);
 });
 
-test("food icons scale from the canvas origin so high-density screens show the full icon", () => {
-  assert.match(iconsSource, /scale\(scaleX = unit, scaleY = unit, pivot = Offset\.Zero\)/);
-  assert.doesNotMatch(iconsSource, /withTransform\(\{ scale\(scaleX = unit, scaleY = unit\) \}\)/);
+test("food camera controls use rounded Material icons instead of custom canvas drawings", () => {
+  assert.match(foodUiSource, /Icons\.AutoMirrored\.Rounded\.RotateLeft/);
+  assert.match(foodUiSource, /Icons\.AutoMirrored\.Rounded\.RotateRight/);
+  assert.equal(source("app/src/main/java/com/gymstatistics/ui/FoodIcons.kt"), "");
 });
 
 test("camera serializes surface lifecycle before creating a capture session", () => {
@@ -167,8 +167,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.7 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 24/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.7"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.7\.apk/);
+test("release metadata is 1.3.8 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 25/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.8"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.8\.apk/);
 });
