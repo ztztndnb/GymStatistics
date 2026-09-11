@@ -46,6 +46,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -183,7 +184,11 @@ fun GymApp(viewModel: GymViewModel) {
                                         onClick = { screen = Screen.FOOD },
                                         modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
                                     ) {
-                                        FoodCameraIcon(tint = MaterialTheme.colorScheme.onSurface)
+                                        Icon(
+                                            Icons.Rounded.PhotoCamera,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                        )
                                     }
                                 }
                             },

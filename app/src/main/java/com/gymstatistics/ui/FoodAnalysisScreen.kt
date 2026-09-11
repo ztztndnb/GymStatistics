@@ -30,7 +30,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.RotateLeft
+import androidx.compose.material.icons.automirrored.rounded.RotateRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -406,7 +412,12 @@ private fun FoodCameraSurface(
                 .background(cameraControlColor)
                 .semantics { contentDescription = "配置 API Key" },
         ) {
-            FoodKeyIcon(tint = cameraControlContentColor, modifier = Modifier.size(30.dp))
+            Icon(
+                Icons.Rounded.Key,
+                contentDescription = null,
+                tint = cameraControlContentColor,
+                modifier = Modifier.size(30.dp),
+            )
         }
 
         Row(
@@ -543,6 +554,8 @@ private fun FoodPhotoConfirmation(
                 enabled = bitmap != null && !loading && !rotating,
                 modifier = Modifier.weight(1f),
             ) {
+                Icon(Icons.AutoMirrored.Rounded.RotateLeft, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(6.dp))
                 Text("向左旋转")
             }
             OutlinedButton(
@@ -550,6 +563,8 @@ private fun FoodPhotoConfirmation(
                 enabled = bitmap != null && !loading && !rotating,
                 modifier = Modifier.weight(1f),
             ) {
+                Icon(Icons.AutoMirrored.Rounded.RotateRight, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(6.dp))
                 Text("向右旋转")
             }
         }
@@ -625,7 +640,10 @@ private fun rotateFoodPhoto(file: File, direction: FoodPhotoRotation): Boolean {
     }
 }
 
-private enum class CameraActionIcon { GALLERY, HISTORY }
+internal enum class CameraActionIcon(val imageVector: ImageVector) {
+    GALLERY(Icons.Rounded.PhotoLibrary),
+    HISTORY(Icons.Rounded.History),
+}
 
 @Composable
 private fun CameraCornerAction(
@@ -645,10 +663,7 @@ private fun CameraCornerAction(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        when (icon) {
-            CameraActionIcon.GALLERY -> FoodPhotoIcon(tint = contentColor, modifier = Modifier.size(32.dp))
-            CameraActionIcon.HISTORY -> FoodHistoryIcon(tint = contentColor, modifier = Modifier.size(32.dp))
-        }
+        Icon(icon.imageVector, contentDescription = null, tint = contentColor, modifier = Modifier.size(32.dp))
         Text(label, color = contentColor, fontSize = 13.sp)
     }
 }
