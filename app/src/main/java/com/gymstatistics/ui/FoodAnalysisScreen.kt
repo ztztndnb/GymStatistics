@@ -3,11 +3,14 @@ package com.gymstatistics.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -51,6 +55,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.semantics.contentDescription
@@ -80,6 +87,8 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     var keyInput by remember { mutableStateOf("") }
     var deleteId by remember { mutableStateOf<String?>(null) }
     var captureError by remember { mutableStateOf<String?>(null) }
+    var capturedPhoto by remember { mutableStateOf<File?>(null) }
+    var cameraEntryReady by remember { mutableStateOf(false) }
     var cameraPermissionGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
@@ -91,20 +100,39 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        viewModel.clearFoodAnalysisResult()
+        cameraEntryReady = true
         if (!cameraPermissionGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
     LaunchedEffect(state.foodAnalysisResult?.id) {
-        state.foodAnalysisResult?.let { draft = it }
+        if (cameraEntryReady) {
+            state.foodAnalysisResult?.let {
+                capturedPhoto?.delete()
+                capturedPhoto = null
+                draft = it
+            }
+        }
     }
     BackHandler {
         when {
             showKeyDialog -> showKeyDialog = false
+            capturedPhoto != null -> {
+                capturedPhoto?.delete()
+                capturedPhoto = null
+                viewModel.clearFoodAnalysisResult()
+            }
             draft != null -> {
                 draft = null
                 viewModel.clearFoodAnalysisResult()
             }
-            page != null -> page = null
-            else -> onBack()
+            page != null -> {
+                page = null
+                viewModel.clearFoodAnalysisResult()
+            }
+            else -> {
+                viewModel.clearFoodAnalysisResult()
+                onBack()
+            }
         }
     }
 
@@ -120,8 +148,14 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                                     draft = null
                                     viewModel.clearFoodAnalysisResult()
                                 }
-                                page != null -> page = null
-                                else -> onBack()
+                                page != null -> {
+                                    page = null
+                                    viewModel.clearFoodAnalysisResult()
+                                }
+                                else -> {
+                                    viewModel.clearFoodAnalysisResult()
+                                    onBack()
+                                }
                             }
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -141,6 +175,29 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 },
                 modifier = Modifier.padding(padding),
             )
+            capturedPhoto != null -> FoodPhotoConfirmation(
+                photoFile = capturedPhoto!!,
+                loading = state.foodAnalysisLoading,
+                error = captureError ?: state.foodAnalysisError,
+                onRetake = {
+                    capturedPhoto?.delete()
+                    capturedPhoto = null
+                    captureError = null
+                    viewModel.clearFoodAnalysisResult()
+                },
+                onConfirm = {
+                    if (!state.deepSeekKeyConfigured) {
+                        showKeyDialog = true
+                    } else {
+                        capturedPhoto?.let { photo ->
+                            viewModel.analyzeFoodImage(
+                                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo),
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.padding(padding),
+            )
             page != null -> FoodAnalysisHistory(
                 records = state.foodAnalyses,
                 onOpen = { draft = it },
@@ -152,7 +209,11 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 loading = state.foodAnalysisLoading,
                 error = captureError ?: state.foodAnalysisError,
                 onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                onBack = onBack,
+                onBack = {
+                    viewModel.clearFoodAnalysisResult()
+                    captureError = null
+                    onBack()
+                },
                 onSettings = {
                     keyInput = ""
                     showKeyDialog = true
@@ -173,11 +234,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         val file = createFoodCameraFile(context)
                         cameraView.takePicture(
                             file,
-                            onSaved = {
-                                viewModel.analyzeFoodImage(
-                                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file),
-                                )
-                            },
+                            onSaved = { capturedPhoto = file },
                             onError = {
                                 file.delete()
                                 captureError = "拍照失败：$it"
@@ -185,7 +242,10 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         )
                     }
                 },
-                onHistory = { page = FoodPage.HISTORY },
+                onHistory = {
+                    viewModel.clearFoodAnalysisResult()
+                    page = FoodPage.HISTORY
+                },
                 modifier = Modifier.padding(padding),
             )
         }
@@ -259,19 +319,24 @@ private fun FoodCameraSurface(
     modifier: Modifier = Modifier,
 ) {
     var cameraView by remember { mutableStateOf<FoodCameraView?>(null) }
+    val letterboxColor = MaterialTheme.colorScheme.surface.toArgb()
     DisposableEffect(Unit) {
         onDispose { cameraView?.stop() }
     }
-    Box(modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         if (cameraPermissionGranted) {
             AndroidView(
                 factory = {
                     FoodCameraView(it).also { view ->
+                        view.setBackgroundColor(letterboxColor)
                         cameraView = view
                         view.start()
                     }
                 },
-                update = { cameraView = it },
+                update = {
+                    cameraView = it
+                    it.setBackgroundColor(letterboxColor)
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -361,6 +426,93 @@ private fun FoodCameraSurface(
             )
         }
     }
+}
+
+@Composable
+private fun FoodPhotoConfirmation(
+    photoFile: File,
+    loading: Boolean,
+    error: String?,
+    onRetake: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bitmap = remember(photoFile) { decodeFoodPhoto(photoFile) }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+    ) {
+        Text("确认照片", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "确认图片清晰、主体完整后，再发送给 DeepSeek 分析。",
+            color = MaterialTheme.colorScheme.outline,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (bitmap != null) {
+                Image(
+                    bitmap.asImageBitmap(),
+                    contentDescription = "待确认的食物照片",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Text("照片加载失败，请重新拍摄", color = MaterialTheme.colorScheme.error)
+            }
+        }
+        if (!error.isNullOrBlank()) {
+            Text(
+                error,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedButton(
+                onClick = onRetake,
+                enabled = !loading,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("重新拍摄")
+            }
+            Button(
+                onClick = onConfirm,
+                enabled = bitmap != null && !loading,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(if (loading) "正在分析…" else "确认并分析")
+            }
+        }
+    }
+}
+
+private fun decodeFoodPhoto(file: File): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > 2048 || bounds.outHeight / sampleSize > 2048) {
+        sampleSize *= 2
+    }
+    return BitmapFactory.decodeFile(
+        file.absolutePath,
+        BitmapFactory.Options().apply { inSampleSize = sampleSize },
+    )
 }
 
 private enum class CameraActionIcon { GALLERY, HISTORY }

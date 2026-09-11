@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
@@ -42,6 +44,7 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
     private var pendingError: ((String) -> Unit)? = null
     private var pendingCapture: File? = null
     private var captureSubmitted = false
+    @Volatile private var previewBufferSize: Size? = null
     @Volatile private var started = false
     @Volatile private var activeSurfaceTexture: SurfaceTexture? = null
     private var surfaceGeneration = 0L
@@ -89,6 +92,13 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
             }
 
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+        }
+    }
+
+    override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight)
+        previewBufferSize?.let { size ->
+            textureView.post { applyPreviewTransform(size) }
         }
     }
 
@@ -392,6 +402,8 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
                 ?: Size(1920, 1080)
             try {
                 surface.setDefaultBufferSize(size.width, size.height)
+                previewBufferSize = size
+                textureView.post { applyPreviewTransform(size) }
                 val outputSurface = Surface(surface)
                 previewSurface = outputSurface
                 val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
@@ -469,6 +481,19 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
         previewSurface?.release()
         previewSurface = null
         cameraCharacteristics = null
+        previewBufferSize = null
+    }
+
+    private fun applyPreviewTransform(bufferSize: Size) {
+        val viewWidth = textureView.width.toFloat()
+        val viewHeight = textureView.height.toFloat()
+        if (viewWidth <= 0f || viewHeight <= 0f || bufferSize.width <= 0 || bufferSize.height <= 0) return
+        val source = RectF(0f, 0f, bufferSize.width.toFloat(), bufferSize.height.toFloat())
+        val target = RectF(0f, 0f, viewWidth, viewHeight)
+        val transform = Matrix().apply {
+            setRectToRect(source, target, Matrix.ScaleToFit.CENTER)
+        }
+        textureView.setTransform(transform)
     }
 
     private fun findBackCamera(): String? = cameraManager.cameraIdList.firstOrNull { id ->
