@@ -2,12 +2,17 @@ package com.gymstatistics
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gymstatistics.ai.DeepSeekFoodAnalyzer
 import com.gymstatistics.data.ExerciseRecord
+import com.gymstatistics.data.AiSettingsRepository
+import com.gymstatistics.data.FoodAnalysisRecord
+import com.gymstatistics.data.FoodAnalysisRepository
 import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.ImportResult
 import com.gymstatistics.data.MuscleSelection
@@ -26,6 +31,11 @@ data class UiState(
     val syncEnabled: Boolean = false,
     val syncUrl: String? = null,
     val message: String? = null,
+    val foodAnalyses: List<FoodAnalysisRecord> = emptyList(),
+    val deepSeekKeyConfigured: Boolean = false,
+    val foodAnalysisLoading: Boolean = false,
+    val foodAnalysisResult: FoodAnalysisRecord? = null,
+    val foodAnalysisError: String? = null,
 )
 
 class GymViewModel(app: Application) : AndroidViewModel(app) {
@@ -35,6 +45,9 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val repo = WorkoutRepository(app)
+    private val foodRepo = FoodAnalysisRepository(app)
+    private val aiSettings = AiSettingsRepository(app)
+    private val foodAnalyzer = DeepSeekFoodAnalyzer(app)
     private var server: LanSyncServer? = null
     private var seedDemo = false
     private var autoSync = false
@@ -49,7 +62,12 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 data = demoData()
                 repo.save(data)
             }
-            uiState = uiState.copy(data = data, loaded = true)
+            uiState = uiState.copy(
+                data = data,
+                loaded = true,
+                foodAnalyses = foodRepo.load().sortedByDescending { it.createdAt },
+                deepSeekKeyConfigured = aiSettings.getApiKey() != null,
+            )
             if (autoSync) setSync(true)
         }
     }
@@ -173,6 +191,67 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMessage() {
         uiState = uiState.copy(message = null)
+    }
+
+    fun setDeepSeekApiKey(key: String) {
+        if (key.isBlank()) {
+            uiState = uiState.copy(message = "API Key 不能为空")
+            return
+        }
+        runCatching { aiSettings.setApiKey(key) }
+            .onSuccess { uiState = uiState.copy(deepSeekKeyConfigured = true, message = "API Key 已保存") }
+            .onFailure { uiState = uiState.copy(message = "API Key 保存失败") }
+    }
+
+    fun clearDeepSeekApiKey() {
+        aiSettings.clearApiKey()
+        uiState = uiState.copy(deepSeekKeyConfigured = false, message = "API Key 已删除")
+    }
+
+    fun analyzeFoodImage(uri: Uri) {
+        val key = aiSettings.getApiKey()
+        if (key.isNullOrBlank()) {
+            uiState = uiState.copy(message = "请先配置 DeepSeek API Key")
+            return
+        }
+        uiState = uiState.copy(foodAnalysisLoading = true, foodAnalysisError = null, foodAnalysisResult = null)
+        viewModelScope.launch {
+            runCatching { foodAnalyzer.analyze(uri, key) }
+                .onSuccess { result ->
+                    uiState = uiState.copy(foodAnalysisLoading = false, foodAnalysisResult = result)
+                }
+                .onFailure { error ->
+                    uiState = uiState.copy(
+                        foodAnalysisLoading = false,
+                        foodAnalysisError = error.message ?: "食物分析失败",
+                        message = error.message ?: "食物分析失败",
+                    )
+                }
+                .also { cleanupFoodCameraFiles() }
+        }
+    }
+
+    fun clearFoodAnalysisResult() {
+        uiState = uiState.copy(foodAnalysisResult = null, foodAnalysisError = null)
+    }
+
+    fun saveFoodAnalysis(record: FoodAnalysisRecord) {
+        val records = (uiState.foodAnalyses.filterNot { it.id == record.id } + record)
+            .sortedByDescending { it.createdAt }
+        uiState = uiState.copy(foodAnalyses = records, foodAnalysisResult = null, message = "已保存食物分析")
+        viewModelScope.launch { foodRepo.saveAll(records) }
+    }
+
+    fun deleteFoodAnalysis(id: String) {
+        val records = uiState.foodAnalyses.filterNot { it.id == id }
+        uiState = uiState.copy(foodAnalyses = records, message = "已删除食物分析")
+        viewModelScope.launch { foodRepo.saveAll(records) }
+    }
+
+    private fun cleanupFoodCameraFiles() {
+        getApplication<Application>().cacheDir.listFiles()
+            ?.filter { it.name.startsWith("food-analysis-") && it.extension == "jpg" }
+            ?.forEach { it.delete() }
     }
 
     /** Turn the fatigue warning for this action on/off (persisted). */

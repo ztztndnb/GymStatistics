@@ -129,7 +129,7 @@ import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private enum class Screen { MAIN, HISTORY, SYNC }
+private enum class Screen { MAIN, HISTORY, SYNC, FOOD }
 
 private const val MIN_SWIPE_DISTANCE = 100f
 private const val MIN_FLING_VELOCITY = 1000f
@@ -280,6 +280,10 @@ fun GymApp(viewModel: GymViewModel) {
                             OutlinedButton(onClick = { screen = Screen.SYNC }, modifier = Modifier.fillMaxWidth()) {
                                 Text("局域网同步")
                             }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = { screen = Screen.FOOD }, modifier = Modifier.fillMaxWidth()) {
+                                Text("AI食物分析")
+                            }
                         }
                     }
                 }
@@ -331,6 +335,8 @@ fun GymApp(viewModel: GymViewModel) {
             )
 
             Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
+
+            Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { screen = Screen.MAIN })
         }
     }
 
