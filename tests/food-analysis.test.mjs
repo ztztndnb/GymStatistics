@@ -13,6 +13,7 @@ const calculatorSource = source("app/src/main/java/com/gymstatistics/data/FoodAn
 const analyzerSource = source("app/src/main/java/com/gymstatistics/ai/DeepSeekFoodAnalyzer.kt");
 const promptSource = source("app/src/main/java/com/gymstatistics/ai/FoodAnalysisPrompt.kt");
 const repositorySource = source("app/src/main/java/com/gymstatistics/data/FoodAnalysisRepository.kt");
+const imageStoreSource = source("app/src/main/java/com/gymstatistics/data/FoodAnalysisImageStore.kt");
 const settingsSource = source("app/src/main/java/com/gymstatistics/data/AiSettingsRepository.kt");
 const viewModelSource = source("app/src/main/java/com/gymstatistics/GymViewModel.kt");
 const uiSource = source("app/src/main/java/com/gymstatistics/ui/GymApp.kt");
@@ -42,6 +43,15 @@ test("food history is stored in a separate repository and not workout sessions",
   assert.match(viewModelSource, /FoodAnalysisRepository/);
   assert.match(viewModelSource, /saveFoodAnalysis/);
   assert.match(viewModelSource, /deleteFoodAnalysis/);
+});
+
+test("food analysis history keeps a private image copy and deletes it with its record", () => {
+  assert.match(modelsSource, /image_file_name/);
+  assert.match(imageStoreSource, /food-analysis-images/);
+  assert.match(imageStoreSource, /Bitmap\.CompressFormat\.JPEG/);
+  assert.match(viewModelSource, /imageStore\.save/);
+  assert.match(viewModelSource, /imageStore\.delete/);
+  assert.match(viewModelSource, /saveFoodAnalysisWithoutImage/);
 });
 
 test("DeepSeek API key is encrypted with Android Keystore", () => {
@@ -153,12 +163,17 @@ test("captured camera photos require confirmation before DeepSeek analysis", () 
   assert.doesNotMatch(foodUiSource, /onSaved = \{\s*viewModel\.analyzeFoodImage/);
 });
 
-test("food result editing recalculates editable nutrients and saves separate history", () => {
+test("food result uses a photo-backed report with editable nutrients and separate history", () => {
+  assert.match(foodUiSource, /FoodAnalysisReport/);
+  assert.match(foodUiSource, /reportNutrients/);
+  assert.match(foodUiSource, /分析原图/);
+  assert.match(foodUiSource, /编辑分析结果/);
   assert.match(foodUiSource, /FoodAnalysisEditor/);
   assert.match(foodUiSource, /重量 \(g\)/);
   assert.match(foodUiSource, /kcal\/100g/);
   assert.match(foodUiSource, /保存到食物分析历史/);
   assert.match(foodUiSource, /FoodAnalysisCalculator\.total/);
+  assert.doesNotMatch(foodUiSource, /一键记录|我要吐槽|体重管理建议/);
   assert.match(viewModelSource, /foodRepo\.saveAll/);
 });
 
@@ -167,8 +182,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.8 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 25/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.8"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.8\.apk/);
+test("release metadata is 1.3.9 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 26/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.9"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.9\.apk/);
 });
