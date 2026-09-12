@@ -201,13 +201,23 @@ test("food report keeps its rounded body while the image and report scroll toget
   assert.doesNotMatch(foodUiSource, /rememberLazyListState\(\)/);
 });
 
+test("food report moves the rounded sheet over a fixed image from the bottom upward", () => {
+  assert.match(foodUiSource, /verticalScroll\(scrollState\)/);
+  assert.match(foodUiSource, /if \(bitmap != null\) \{\s*Spacer\(Modifier\.height\(252\.dp\)\)/s);
+  assert.doesNotMatch(foodUiSource, /\.offset\(y = if \(bitmap != null\) \(-28\)\.dp else 0\.dp\)/);
+});
+
+test("food report nutrition cards center their content across the full card width", () => {
+  assert.match(foodUiSource, /Column\(\s*modifier = Modifier\s*\.fillMaxWidth\(\)\s*\.padding\(vertical = 14\.dp, horizontal = 6\.dp\),\s*horizontalAlignment = Alignment\.CenterHorizontally,/s);
+});
+
 test("camera uses a FileProvider and no barcode scanner dependency is introduced", () => {
   assert.match(manifestSource, /FileProvider/);
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.11 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 28/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.11"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.11\.apk/);
+test("release metadata is 1.3.12 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 29/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.12"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.12\.apk/);
 });
