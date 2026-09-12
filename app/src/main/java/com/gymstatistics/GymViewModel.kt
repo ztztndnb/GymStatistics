@@ -249,7 +249,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 onImageSaveFailed()
                 return@launch
             }
-            saveFoodAnalysisWithoutImage(record.copy(imageFileName = imageName ?: record.imageFileName))
+            persistFoodAnalysis(record.copy(imageFileName = imageName ?: record.imageFileName))
             onSaved()
         }
     }
@@ -257,10 +257,14 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     fun saveFoodAnalysis(record: FoodAnalysisRecord) = saveFoodAnalysisWithoutImage(record)
 
     fun saveFoodAnalysisWithoutImage(record: FoodAnalysisRecord) {
+        viewModelScope.launch { persistFoodAnalysis(record) }
+    }
+
+    private suspend fun persistFoodAnalysis(record: FoodAnalysisRecord) {
         val records = (uiState.foodAnalyses.filterNot { it.id == record.id } + record)
             .sortedByDescending { it.createdAt }
         uiState = uiState.copy(foodAnalyses = records, foodAnalysisResult = null, message = "已保存食物分析")
-        viewModelScope.launch { foodRepo.saveAll(records) }
+        foodRepo.saveAll(records)
     }
 
     fun deleteFoodAnalysis(id: String) {

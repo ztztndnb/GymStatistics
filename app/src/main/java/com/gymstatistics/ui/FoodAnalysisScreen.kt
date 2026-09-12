@@ -89,6 +89,7 @@ import com.gymstatistics.data.FoodAnalysisCalculator
 import com.gymstatistics.data.FoodAnalysisItem
 import com.gymstatistics.data.FoodAnalysisRecord
 import com.gymstatistics.data.NutritionPer100g
+import com.gymstatistics.data.replaceFoodAnalysisItem
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -110,6 +111,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     val state = viewModel.uiState
     var page by remember { mutableStateOf<FoodPage?>(null) }
     var draft by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
+    var editingItemIndex by remember { mutableStateOf<Int?>(null) }
     var report by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var reportImageUri by remember { mutableStateOf<Uri?>(null) }
     var reportCameraFile by remember { mutableStateOf<File?>(null) }
@@ -144,17 +146,18 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     fun saveReport(record: FoodAnalysisRecord) {
         val normalized = record.copy(totalWeightG = FoodAnalysisCalculator.total(record).weightG)
         val sourceImage = reportImageUri
-        if (sourceImage == null) {
-            viewModel.saveFoodAnalysisWithoutImage(normalized)
-            report = normalized
-            draft = null
-            return
-        }
         viewModel.saveFoodAnalysis(
             record = normalized,
             sourceImage = sourceImage,
             onImageSaveFailed = { imageSaveFailure = normalized },
-            onSaved = { leaveReport() },
+            onSaved = {
+                if (sourceImage == null) {
+                    report = normalized
+                    draft = null
+                } else {
+                    leaveReport()
+                }
+            },
         )
     }
 
@@ -230,7 +233,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
         when {
             draft != null -> FoodAnalysisEditor(
                 record = draft!!,
-                onChange = { draft = it },
+                itemIndex = editingItemIndex,
                 onSave = ::saveReport,
                 modifier = Modifier.padding(padding),
             )
@@ -239,7 +242,14 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 imageUri = reportImageUri,
                 imageFile = historyImageFile(context, report!!),
                 onBack = ::leaveReport,
-                onEdit = { draft = report },
+                onEdit = {
+                    editingItemIndex = null
+                    draft = report
+                },
+                onEditItem = { index ->
+                    editingItemIndex = index
+                    draft = report
+                },
                 onSave = { saveReport(report!!) },
                 modifier = Modifier.padding(padding),
             )
@@ -784,49 +794,56 @@ private fun FoodAnalysisReport(
     imageFile: File?,
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onEditItem: (Int) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val totals = FoodAnalysisCalculator.total(record)
     val listState = rememberLazyListState()
-    val compactHeader by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 120 }
-    }
     val bitmap = remember(imageUri, imageFile) { decodeFoodImage(context, imageUri, imageFile) }
+    val compactHeader by remember(bitmap != null) {
+        val compactHeaderIndex = if (bitmap != null) 3 else 2
+        derivedStateOf { listState.firstVisibleItemIndex >= compactHeaderIndex }
+    }
     val nutrients = remember(totals.nutrition) { reportNutrients(totals.nutrition) }
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "分析原图",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(280.dp),
-            )
-            Box(Modifier.fillMaxWidth().height(280.dp).background(Color.Black.copy(alpha = 0.22f)))
-        }
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = if (bitmap != null) 208.dp else 0.dp)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(MaterialTheme.colorScheme.surface),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 18.dp, end = 16.dp, bottom = 98.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 98.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
-                Column {
-                    if (bitmap != null) {
-                        Box(
-                            Modifier
-                                .size(width = 36.dp, height = 4.dp)
-                                .align(Alignment.CenterHorizontally)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.outlineVariant),
+            if (bitmap != null) {
+                item(key = "analysis-image") {
+                    Box(Modifier.fillMaxWidth().height(280.dp)) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "分析原图",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
                         )
-                        Spacer(Modifier.height(14.dp))
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.32f)),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "返回",
+                                tint = Color.White,
+                            )
+                        }
                     }
+                }
+            }
+            item(key = "report-summary") {
+                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(record.foodName, style = MaterialTheme.typography.headlineSmall)
@@ -836,7 +853,7 @@ private fun FoodAnalysisReport(
                     }
                 }
             }
-            item {
+            item(key = "report-energy") {
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -862,8 +879,9 @@ private fun FoodAnalysisReport(
             }
             if (record.items.isNotEmpty()) {
                 item { Text("食材明细", style = MaterialTheme.typography.titleLarge) }
-                items(record.items, key = { "${it.name}-${it.weightG}" }) { item ->
-                    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit)) {
+                items(record.items.indices.toList(), key = { it }) { index ->
+                    val item = record.items[index]
+                    Card(modifier = Modifier.fillMaxWidth().clickable { onEditItem(index) }) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(item.name, style = MaterialTheme.typography.titleMedium)
@@ -873,7 +891,7 @@ private fun FoodAnalysisReport(
                                     fontSize = 12.sp,
                                 )
                             }
-                            Text("›", fontSize = 24.sp, color = MaterialTheme.colorScheme.outline)
+                            TextButton(onClick = { onEditItem(index) }) { Text("修改") }
                         }
                     }
                 }
@@ -924,19 +942,19 @@ private fun FoodAnalysisReport(
                     Text(record.foodName, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 }
             }
-        } else {
+        } else if (bitmap == null) {
             IconButton(
                 onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(12.dp)
                     .clip(CircleShape)
-                    .background(if (bitmap != null) Color.Black.copy(alpha = 0.32f) else MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
-                    tint = if (bitmap != null) Color.White else MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -965,39 +983,52 @@ private fun ReportMacro(label: String, value: Double?, modifier: Modifier = Modi
 @Composable
 private fun FoodAnalysisEditor(
     record: FoodAnalysisRecord,
-    onChange: (FoodAnalysisRecord) -> Unit,
+    itemIndex: Int?,
     onSave: (FoodAnalysisRecord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val totals = FoodAnalysisCalculator.total(record)
+    var editedRecord by remember(record.id) { mutableStateOf(record) }
+    val totals = FoodAnalysisCalculator.total(editedRecord)
+    val editableIndices = itemIndex
+        ?.takeIf { it in editedRecord.items.indices }
+        ?.let(::listOf)
+        ?: editedRecord.items.indices.toList()
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                Text(record.foodName, style = MaterialTheme.typography.titleLarge)
-                Text("识别类型：${foodTypeLabel(record.imageType)}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                Text(
+                    if (itemIndex != null && itemIndex in editedRecord.items.indices) {
+                        "编辑：${editedRecord.items[itemIndex].name}"
+                    } else {
+                        editedRecord.foodName
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text("识别类型：${foodTypeLabel(editedRecord.imageType)}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
                 Text("总重量：${formatNumber(totals.weightG)} g", fontSize = 16.sp)
                 Text("整份能量：${formatNumber(totals.nutrition.energyKcal)} kcal", fontSize = 16.sp)
                 Text("营养数据均为每100g，可逐项修改", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                if (record.ingredientsText.isNotBlank()) {
-                    Text("配料文字：${record.ingredientsText}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                if (itemIndex != null) {
+                    Text("本次只修改这一项食材，其他食材会原样保留", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
                 }
-                if (record.uncertaintyNote.isNotBlank()) {
-                    Text("说明：${record.uncertaintyNote}", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                if (editedRecord.ingredientsText.isNotBlank()) {
+                    Text("配料文字：${editedRecord.ingredientsText}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                }
+                if (editedRecord.uncertaintyNote.isNotBlank()) {
+                    Text("说明：${editedRecord.uncertaintyNote}", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                 }
             }
-            items(record.items.indices.toList(), key = { it }) { index ->
-                val item = record.items[index]
+            items(editableIndices, key = { it }) { index ->
+                val item = editedRecord.items[index]
                 FoodItemEditor(
                     item = item,
                     onChange = { changed ->
-                        val items = record.items.toMutableList()
-                        items[index] = changed
-                        onChange(record.copy(items = items))
+                        editedRecord = replaceFoodAnalysisItem(editedRecord, index, changed)
                     },
                 )
             }
         }
-        Button(onClick = { onSave(record.copy(totalWeightG = totals.weightG)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Button(onClick = { onSave(editedRecord.copy(totalWeightG = totals.weightG)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text("保存到食物分析历史")
         }
     }
