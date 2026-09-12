@@ -21,15 +21,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.RotateLeft
@@ -56,7 +58,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -186,6 +189,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             }
             draft != null -> {
                 draft = null
+                editingItemIndex = null
             }
             report != null -> {
                 leaveReport()
@@ -211,6 +215,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                             when {
                                 draft != null -> {
                                     draft = null
+                                    editingItemIndex = null
                                     viewModel.clearFoodAnalysisResult()
                                 }
                                 page != null -> {
@@ -234,6 +239,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             draft != null -> FoodAnalysisEditor(
                 record = draft!!,
                 itemIndex = editingItemIndex,
+                onChange = { draft = it },
                 onSave = ::saveReport,
                 modifier = Modifier.padding(padding),
             )
@@ -800,50 +806,67 @@ private fun FoodAnalysisReport(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val totals = FoodAnalysisCalculator.total(record)
-    val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
     val bitmap = remember(imageUri, imageFile) { decodeFoodImage(context, imageUri, imageFile) }
-    val compactHeader by remember(bitmap != null) {
-        val compactHeaderIndex = if (bitmap != null) 3 else 2
-        derivedStateOf { listState.firstVisibleItemIndex >= compactHeaderIndex }
-    }
+    var viewportTopPx by remember { mutableStateOf(Float.POSITIVE_INFINITY) }
+    var energyBottomPx by remember { mutableStateOf(Float.POSITIVE_INFINITY) }
+    val compactHeader = energyBottomPx.isFinite() && energyBottomPx <= viewportTopPx
     val nutrients = remember(totals.nutrition) { reportNutrients(totals.nutrition) }
-    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        LazyColumn(
-            state = listState,
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .onGloballyPositioned { viewportTopPx = it.positionInRoot().y },
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 98.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .verticalScroll(scrollState),
         ) {
             if (bitmap != null) {
-                item(key = "analysis-image") {
-                    Box(Modifier.fillMaxWidth().height(280.dp)) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "分析原图",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
+                Box(Modifier.fillMaxWidth().height(280.dp)) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "分析原图",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.32f)),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = Color.White,
                         )
-                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.32f)),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "返回",
-                                tint = Color.White,
-                            )
-                        }
                     }
                 }
             }
-            item(key = "report-summary") {
-                Column {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = if (bitmap != null) (-28).dp else 0.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, top = 18.dp, end = 16.dp, bottom = 112.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    if (bitmap != null) {
+                        Box(
+                            Modifier
+                                .size(width = 36.dp, height = 4.dp)
+                                .align(Alignment.CenterHorizontally)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(record.foodName, style = MaterialTheme.typography.headlineSmall)
@@ -851,79 +874,76 @@ private fun FoodAnalysisReport(
                         }
                         TextButton(onClick = onEdit) { Text("编辑") }
                     }
-                }
-            }
-            item(key = "report-energy") {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Brush.horizontalGradient(listOf(Color(0xFFE9FBF4), Color(0xFFF9FFFC))))
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                ) {
-                    Text("🔥  ${formatNumber(totals.nutrition.energyKcal)} 千卡", fontSize = 30.sp)
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(vertical = 18.dp),
-                ) {
-                    ReportMacro("碳水化合物", totals.nutrition.carbohydrateG, Modifier.weight(1f))
-                    ReportMacro("蛋白质", totals.nutrition.proteinG, Modifier.weight(1f))
-                    ReportMacro("脂肪", totals.nutrition.fatG, Modifier.weight(1f))
-                }
-            }
-            if (record.items.isNotEmpty()) {
-                item { Text("食材明细", style = MaterialTheme.typography.titleLarge) }
-                items(record.items.indices.toList(), key = { it }) { index ->
-                    val item = record.items[index]
-                    Card(modifier = Modifier.fillMaxWidth().clickable { onEditItem(index) }) {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(item.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "${formatNumber(item.weightG)} g · ${formatNumber(item.nutritionPer100g.energyKcal)} kcal/100g",
-                                    color = MaterialTheme.colorScheme.outline,
-                                    fontSize = 12.sp,
-                                )
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Brush.horizontalGradient(listOf(Color(0xFFE9FBF4), Color(0xFFF9FFFC))))
+                            .onGloballyPositioned {
+                                val position = it.positionInRoot()
+                                energyBottomPx = position.y + it.size.height
                             }
-                            TextButton(onClick = { onEditItem(index) }) { Text("修改") }
-                        }
+                            .padding(horizontal = 20.dp, vertical = 18.dp),
+                    ) {
+                        Text("🔥  ${formatNumber(totals.nutrition.energyKcal)} 千卡", fontSize = 30.sp)
                     }
-                }
-            }
-            if (nutrients.isNotEmpty()) {
-                item { Text("营养信息", style = MaterialTheme.typography.titleLarge) }
-                items(nutrients.chunked(3)) { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { nutrient ->
-                            Card(modifier = Modifier.weight(1f)) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                                    Text("${formatNumber(nutrient.value)} ${nutrient.unit}", fontSize = 18.sp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(vertical = 18.dp),
+                    ) {
+                        ReportMacro("碳水化合物", totals.nutrition.carbohydrateG, Modifier.weight(1f))
+                        ReportMacro("蛋白质", totals.nutrition.proteinG, Modifier.weight(1f))
+                        ReportMacro("脂肪", totals.nutrition.fatG, Modifier.weight(1f))
+                    }
+                    if (record.items.isNotEmpty()) {
+                        Text("食材明细", style = MaterialTheme.typography.titleLarge)
+                        record.items.forEachIndexed { index, item ->
+                            Card(modifier = Modifier.fillMaxWidth().clickable { onEditItem(index) }) {
+                                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.name, style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            "${formatNumber(item.weightG)} g · ${formatNumber(item.nutritionPer100g.energyKcal)} kcal/100g",
+                                            color = MaterialTheme.colorScheme.outline,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                    TextButton(onClick = { onEditItem(index) }) { Text("修改") }
                                 }
                             }
                         }
-                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
-                }
-            }
-            item {
-                Text("说明", style = MaterialTheme.typography.titleLarge)
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        record.uncertaintyNote.ifBlank { "营养数据由 AI 估算，可在编辑分析结果中修改重量和每 100g 营养值。" },
-                        modifier = Modifier.padding(14.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                    )
+                    if (nutrients.isNotEmpty()) {
+                        Text("营养信息", style = MaterialTheme.typography.titleLarge)
+                        nutrients.chunked(3).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { nutrient ->
+                                    Card(modifier = Modifier.weight(1f)) {
+                                        Column(
+                                            modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                                            Text("${formatNumber(nutrient.value)} ${nutrient.unit}", fontSize = 18.sp)
+                                        }
+                                    }
+                                }
+                                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+                    Text("说明", style = MaterialTheme.typography.titleLarge)
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            record.uncertaintyNote.ifBlank { "营养数据由 AI 估算，可在编辑分析结果中修改重量和每 100g 营养值。" },
+                            modifier = Modifier.padding(14.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                        )
+                    }
                 }
             }
         }
@@ -984,6 +1004,7 @@ private fun ReportMacro(label: String, value: Double?, modifier: Modifier = Modi
 private fun FoodAnalysisEditor(
     record: FoodAnalysisRecord,
     itemIndex: Int?,
+    onChange: (FoodAnalysisRecord) -> Unit,
     onSave: (FoodAnalysisRecord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1023,7 +1044,9 @@ private fun FoodAnalysisEditor(
                 FoodItemEditor(
                     item = item,
                     onChange = { changed ->
-                        editedRecord = replaceFoodAnalysisItem(editedRecord, index, changed)
+                        val updated = replaceFoodAnalysisItem(editedRecord, index, changed)
+                        editedRecord = updated
+                        onChange(updated)
                     },
                 )
             }
