@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -818,39 +817,40 @@ private fun FoodAnalysisReport(
             .background(MaterialTheme.colorScheme.surface)
             .onGloballyPositioned { viewportTopPx = it.positionInRoot().y },
     ) {
+        if (bitmap != null) {
+            Box(Modifier.fillMaxWidth().height(280.dp)) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "分析原图",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.32f)),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState),
         ) {
             if (bitmap != null) {
-                Box(Modifier.fillMaxWidth().height(280.dp)) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "分析原图",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.32f)),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回",
-                            tint = Color.White,
-                        )
-                    }
-                }
+                Spacer(Modifier.height(252.dp))
             }
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(y = if (bitmap != null) (-28).dp else 0.dp),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = MaterialTheme.colorScheme.surface,
             ) {
@@ -923,7 +923,9 @@ private fun FoodAnalysisReport(
                                 row.forEach { nutrient ->
                                     Card(modifier = Modifier.weight(1f)) {
                                         Column(
-                                            modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 14.dp, horizontal = 6.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                         ) {
                                             Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
