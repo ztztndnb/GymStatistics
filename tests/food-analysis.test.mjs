@@ -195,7 +195,7 @@ test("food analysis keeps editing and saving at the ingredient and report levels
   assert.match(foodUiSource, /onChange = \{\s*draft = it\s*report = it\s*\}/s);
 });
 
-test("food item editor uses the report nutrition summary without a nested gray card", () => {
+test("food item editor keeps the report summary layout separate from its editor layout", () => {
   const editorSource = foodUiSource.slice(
     foodUiSource.indexOf("private fun FoodAnalysisEditor"),
     foodUiSource.indexOf("private fun NutrientField"),
@@ -205,10 +205,30 @@ test("food item editor uses the report nutrition summary without a nested gray c
     foodUiSource.indexOf("private fun NutrientField"),
   );
   assert.doesNotMatch(editorSource, /总重量：|整份能量：/);
-  assert.match(editorSource, /FoodNutritionSummary\(/);
   assert.match(foodUiSource, /val totals = FoodAnalysisCalculator\.total\(record\)[\s\S]*FoodNutritionSummary\(/);
-  assert.match(itemEditorSource, /FoodNutritionSummary\([\s\S]*FoodAnalysisCalculator\.itemTotals\(item\)/);
+  assert.doesNotMatch(itemEditorSource, /FoodNutritionSummary/);
   assert.doesNotMatch(itemEditorSource, /Card\(/);
+});
+
+test("food item editor puts editable and calculated values inside one nutrition section", () => {
+  const itemEditorSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodItemEditor"),
+    foodUiSource.indexOf("private fun NutrientField"),
+  );
+  const itemEditorBody = itemEditorSource.slice(
+    itemEditorSource.indexOf("private fun FoodItemEditor"),
+    itemEditorSource.indexOf("private fun FoodNutritionEditorSection"),
+  );
+  assert.match(itemEditorBody, /FoodNutritionEditorSection\(/);
+  assert.doesNotMatch(itemEditorBody, /NumericField|NutrientField|FoodNutritionSummary/);
+  assert.match(itemEditorSource, /Text\("营养信息"/);
+  assert.match(itemEditorSource, /NumericField\("总重量 \(g\)"/);
+  assert.match(itemEditorSource, /能量 \(kcal\/100g\)/);
+  assert.match(itemEditorSource, /碳水化合物 \(g\/100g\)/);
+  assert.match(itemEditorSource, /FoodReportNutrient\("总重量"/);
+  assert.match(itemEditorSource, /FoodReportNutrient\("总热量"/);
+  assert.match(itemEditorSource, /FoodAnalysisCalculator\.itemTotals\(item\)/);
+  assert.doesNotMatch(itemEditorSource, /该项目实际能量/);
 });
 
 test("food report scrolls the original image away before showing the compact header", () => {
@@ -249,8 +269,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.14 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 31/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.14"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.14\.apk/);
+test("release metadata is 1.3.15 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 32/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.15"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.15\.apk/);
 });
