@@ -11,8 +11,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -109,6 +107,44 @@ private enum class FoodPage { HISTORY }
 
 private enum class FoodPanel { CAMERA, CONFIRMATION, REPORT, EDITOR, HISTORY }
 
+private sealed interface FoodPanelState {
+    val kind: FoodPanel
+
+    data object Camera : FoodPanelState {
+        override val kind = FoodPanel.CAMERA
+    }
+
+    data class Confirmation(val photo: File) : FoodPanelState {
+        override val kind = FoodPanel.CONFIRMATION
+    }
+
+    data class Report(
+        val record: FoodAnalysisRecord,
+        val imageUri: Uri?,
+        val imageFile: File?,
+    ) : FoodPanelState {
+        override val kind = FoodPanel.REPORT
+    }
+
+    data class Editor(
+        val record: FoodAnalysisRecord,
+        val itemIndex: Int?,
+    ) : FoodPanelState {
+        override val kind = FoodPanel.EDITOR
+    }
+
+    data class History(val records: List<FoodAnalysisRecord>) : FoodPanelState {
+        override val kind = FoodPanel.HISTORY
+    }
+}
+
+private fun isFoodPanelBackNavigation(initial: FoodPanel, target: FoodPanel): Boolean = when (target) {
+    FoodPanel.CAMERA -> initial != FoodPanel.CAMERA
+    FoodPanel.REPORT -> initial == FoodPanel.EDITOR
+    FoodPanel.HISTORY -> initial == FoodPanel.REPORT
+    else -> false
+}
+
 internal enum class FoodPhotoRotation(val degrees: Float) {
     LEFT(-90f),
     RIGHT(90f),
@@ -167,7 +203,9 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             sourceImage = sourceImage,
             onImageSaveFailed = { imageSaveFailure = normalized },
             onSaved = {
-                if (sourceImage == null) {
+                if (reportFromHistory) {
+                    leaveReport()
+                } else if (sourceImage == null) {
                     report = normalized
                     draft = null
                 } else {
@@ -254,48 +292,58 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
         },
     ) { padding ->
         val foodPanel = when {
-            draft != null -> FoodPanel.EDITOR
-            report != null -> FoodPanel.REPORT
-            capturedPhoto != null -> FoodPanel.CONFIRMATION
-            page != null -> FoodPanel.HISTORY
-            else -> FoodPanel.CAMERA
+            draft != null -> FoodPanelState.Editor(draft!!, editingItemIndex)
+            report != null -> FoodPanelState.Report(
+                record = report!!,
+                imageUri = reportImageUri,
+                imageFile = historyImageFile(context, report!!),
+            )
+            capturedPhoto != null -> FoodPanelState.Confirmation(capturedPhoto!!)
+            page != null -> FoodPanelState.History(state.foodAnalyses)
+            else -> FoodPanelState.Camera
         }
         AnimatedContent(
             targetState = foodPanel,
             transitionSpec = {
-                (slideInHorizontally { it / 3 } + fadeIn()) togetherWith
-                    (slideOutHorizontally { -it / 3 } + fadeOut())
+                if (isFoodPanelBackNavigation(initialState.kind, targetState.kind)) {
+                    slideInHorizontally(initialOffsetX = { -it }) togetherWith
+                        slideOutHorizontally(targetOffsetX = { it })
+                } else {
+                    slideInHorizontally(initialOffsetX = { it }) togetherWith
+                        slideOutHorizontally(targetOffsetX = { -it })
+                }
             },
+            contentKey = { it.kind },
             label = "food-analysis-panel",
             modifier = Modifier.padding(padding).fillMaxSize(),
         ) { panel ->
-            when (panel) {
-                FoodPanel.EDITOR -> draft?.let { currentDraft ->
+            when (panel.kind) {
+                FoodPanel.EDITOR -> (panel as? FoodPanelState.Editor)?.let { currentPanel ->
                     FoodAnalysisEditor(
-                        record = currentDraft,
-                        itemIndex = editingItemIndex,
+                        record = currentPanel.record,
+                        itemIndex = currentPanel.itemIndex,
                         onChange = {
                             draft = it
                             report = it
                         },
                     )
                 }
-                FoodPanel.REPORT -> report?.let { currentReport ->
+                FoodPanel.REPORT -> (panel as? FoodPanelState.Report)?.let { currentPanel ->
                     FoodAnalysisReport(
-                        record = currentReport,
-                        imageUri = reportImageUri,
-                        imageFile = historyImageFile(context, currentReport),
+                        record = currentPanel.record,
+                        imageUri = currentPanel.imageUri,
+                        imageFile = currentPanel.imageFile,
                         onBack = ::leaveReport,
                         onEditItem = { index ->
                             editingItemIndex = index
-                            draft = currentReport
+                            draft = currentPanel.record
                         },
-                        onSave = { saveReport(currentReport) },
+                        onSave = { saveReport(currentPanel.record) },
                     )
                 }
-                FoodPanel.CONFIRMATION -> capturedPhoto?.let { photo ->
+                FoodPanel.CONFIRMATION -> (panel as? FoodPanelState.Confirmation)?.let { currentPanel ->
                     FoodPhotoConfirmation(
-                        photoFile = photo,
+                        photoFile = currentPanel.photo,
                         loading = state.foodAnalysisLoading,
                         error = captureError ?: state.foodAnalysisError,
                         onRetake = {
@@ -323,8 +371,9 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         },
                     )
                 }
-                FoodPanel.HISTORY -> FoodAnalysisHistory(
-                    records = state.foodAnalyses,
+                FoodPanel.HISTORY -> (panel as? FoodPanelState.History)?.let { currentPanel ->
+                    FoodAnalysisHistory(
+                    records = currentPanel.records,
                     onOpen = {
                         page = null
                         reportFromHistory = true
@@ -333,7 +382,8 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         report = it
                     },
                     onDelete = { deleteId = it },
-                )
+                    )
+                }
                 FoodPanel.CAMERA -> FoodCameraSurface(
                     cameraPermissionGranted = cameraPermissionGranted,
                     loading = state.foodAnalysisLoading,
@@ -859,19 +909,6 @@ private fun FoodAnalysisReport(
                     modifier = Modifier.fillMaxSize(),
                 )
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.32f)),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = Color.White,
-                    )
-                }
             }
         }
         Column(
@@ -938,6 +975,22 @@ private fun FoodAnalysisReport(
                         )
                     }
                 }
+            }
+        }
+        if (bitmap != null && !compactHeader) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.32f)),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color.White,
+                )
             }
         }
         if (compactHeader) {

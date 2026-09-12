@@ -273,10 +273,37 @@ test("food report and ingredient editor use animated panel transitions", () => {
   assert.match(foodUiSource, /FoodPanel\.EDITOR/);
 });
 
+test("food analysis panel transitions use horizontal sliding without fade-only blending", () => {
+  assert.match(foodUiSource, /isFoodPanelBackNavigation/);
+  assert.match(foodUiSource, /slideInHorizontally\(initialOffsetX = \{ -it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ it \}\)/);
+  assert.match(foodUiSource, /slideInHorizontally\(initialOffsetX = \{ it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ -it \}\)/);
+  assert.doesNotMatch(foodUiSource, /fadeIn|fadeOut/);
+});
+
+test("camera crops captured photos to the same centered aspect ratio as the preview", () => {
+  assert.match(cameraSource, /data class CaptureCropRect/);
+  assert.match(cameraSource, /calculateCaptureCropRect/);
+  assert.match(cameraSource, /cropPhotoToPreview/);
+  assert.match(cameraSource, /cropPhotoToPreview\(file, previewViewWidth, previewViewHeight\)/);
+});
+
 test("opening a report from food history returns to history instead of the camera", () => {
   assert.match(foodUiSource, /var reportFromHistory by remember/);
   assert.match(foodUiSource, /reportFromHistory = true/);
   assert.match(foodUiSource, /if \(reportFromHistory\) \{[\s\S]*page = FoodPage\.HISTORY/s);
+});
+
+test("saving a report opened from food history returns to the history panel", () => {
+  assert.match(foodUiSource, /onSaved = \{[\s\S]*if \(reportFromHistory\) \{[\s\S]*leaveReport\(\)/s);
+});
+
+test("food report keeps the image back arrow above the scrollable content", () => {
+  const reportSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodAnalysisReport"),
+    foodUiSource.indexOf("private fun ReportMacro"),
+  );
+  assert.match(reportSource, /if \(bitmap != null && !compactHeader\) \{[\s\S]*onClick = onBack/s);
+  assert.ok(reportSource.indexOf("if (bitmap != null && !compactHeader)") > reportSource.indexOf("verticalScroll(scrollState)"));
 });
 
 test("food prompt asks to search reliable chain-brand nutrition data before estimating", () => {
@@ -291,8 +318,11 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.16 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 33/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.16"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.16\.apk/);
+test("release metadata is 1.3.18 with the requested APK name", () => {
+  const buildSource = source("app/build.gradle.kts");
+  assert.match(buildSource, /versionCode = 35/);
+  assert.match(buildSource, /versionName = "1\.3\.18"/);
+  assert.match(buildSource, /register\("copyReleaseApkWithVersion"\)/);
+  assert.match(buildSource, /source\.copyTo\(target, overwrite = true\)/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.18\.apk/);
 });
