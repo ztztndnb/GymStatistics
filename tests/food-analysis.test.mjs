@@ -190,15 +190,31 @@ test("food analysis keeps editing and saving at the ingredient and report levels
   assert.match(reportSource, /onSave/);
   assert.equal((foodUiSource.match(/保存到食物分析历史/g) ?? []).length, 1);
   assert.doesNotMatch(editorSource, /onSave|保存到食物分析历史/);
-  assert.match(editorSource, /FoodAnalysisCalculator\.itemTotals/);
+  assert.match(foodUiSource, /FoodAnalysisCalculator\.itemTotals/);
   assert.doesNotMatch(editorSource, /识别类型|营养数据均为每100g|ingredientsText|uncertaintyNote|说明：/);
   assert.match(foodUiSource, /onChange = \{\s*draft = it\s*report = it\s*\}/s);
+});
+
+test("food item editor uses the report nutrition summary without a nested gray card", () => {
+  const editorSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodAnalysisEditor"),
+    foodUiSource.indexOf("private fun NutrientField"),
+  );
+  const itemEditorSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodItemEditor"),
+    foodUiSource.indexOf("private fun NutrientField"),
+  );
+  assert.doesNotMatch(editorSource, /总重量：|整份能量：/);
+  assert.match(editorSource, /FoodNutritionSummary\(/);
+  assert.match(foodUiSource, /val totals = FoodAnalysisCalculator\.total\(record\)[\s\S]*FoodNutritionSummary\(/);
+  assert.match(itemEditorSource, /FoodNutritionSummary\([\s\S]*FoodAnalysisCalculator\.itemTotals\(item\)/);
+  assert.doesNotMatch(itemEditorSource, /Card\(/);
 });
 
 test("food report scrolls the original image away before showing the compact header", () => {
   assert.match(foodUiSource, /verticalScroll\(scrollState\)/);
   assert.match(foodUiSource, /bitmap != null\) \{\s*Box\(Modifier\.fillMaxWidth\(\)\.height\(280\.dp\)\)/s);
-  assert.match(foodUiSource, /energyBottomPx = position\.y \+ it\.size\.height/);
+  assert.match(foodUiSource, /onEnergyBottomChanged = \{ energyBottomPx = it \}/);
   assert.match(foodUiSource, /energyBottomPx\.isFinite\(\)/);
   assert.doesNotMatch(foodUiSource, /padding\(top = if \(bitmap != null\) 208\.dp else 0\.dp\)/);
 });
@@ -233,8 +249,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.13 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 30/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.13"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.13\.apk/);
+test("release metadata is 1.3.14 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 31/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.14"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.14\.apk/);
 });
