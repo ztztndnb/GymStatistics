@@ -23,8 +23,8 @@ android {
         applicationId = "com.gymstatistics"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "1.3.16"
+        versionCode = 35
+        versionName = "1.3.18"
     }
 
     signingConfigs {
@@ -63,6 +63,21 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+val releaseApkName = "GymStatistics ${android.defaultConfig.versionName}.apk"
+tasks.register("copyReleaseApkWithVersion") {
+    dependsOn("packageRelease")
+    doLast {
+        val source = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+        val target = source.resolveSibling(releaseApkName)
+        source.copyTo(target, overwrite = true)
+    }
+}
+tasks.configureEach {
+    if (name == "assembleRelease") {
+        finalizedBy("copyReleaseApkWithVersion")
     }
 }
 

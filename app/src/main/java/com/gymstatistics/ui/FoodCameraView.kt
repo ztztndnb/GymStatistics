@@ -4,6 +4,8 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
@@ -26,6 +28,31 @@ import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.roundToInt
+
+internal data class CaptureCropRect(val left: Int, val top: Int, val width: Int, val height: Int)
+
+internal fun calculateCaptureCropRect(
+    rawWidth: Int,
+    rawHeight: Int,
+    viewWidth: Int,
+    viewHeight: Int,
+): CaptureCropRect {
+    if (rawWidth <= 0 || rawHeight <= 0 || viewWidth <= 0 || viewHeight <= 0) {
+        return CaptureCropRect(0, 0, rawWidth.coerceAtLeast(0), rawHeight.coerceAtLeast(0))
+    }
+    val viewAspect = viewWidth.toFloat() / viewHeight
+    val orientationsDiffer = (viewWidth > viewHeight) != (rawWidth > rawHeight)
+    val targetRawAspect = if (orientationsDiffer) 1f / viewAspect else viewAspect
+    val rawAspect = rawWidth.toFloat() / rawHeight
+    return if (rawAspect > targetRawAspect) {
+        val cropWidth = (rawHeight * targetRawAspect).roundToInt().coerceIn(1, rawWidth)
+        CaptureCropRect((rawWidth - cropWidth) / 2, 0, cropWidth, rawHeight)
+    } else {
+        val cropHeight = (rawWidth / targetRawAspect).roundToInt().coerceIn(1, rawHeight)
+        CaptureCropRect(0, (rawHeight - cropHeight) / 2, rawWidth, cropHeight)
+    }
+}
 
 internal data class PreviewScale(val x: Float, val y: Float)
 
@@ -64,6 +91,8 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
     private var pendingCapture: File? = null
     private var captureSubmitted = false
     @Volatile private var previewBufferSize: Size? = null
+    @Volatile private var previewViewWidth = 0
+    @Volatile private var previewViewHeight = 0
     @Volatile private var started = false
     @Volatile private var activeSurfaceTexture: SurfaceTexture? = null
     private var surfaceGeneration = 0L
@@ -116,6 +145,8 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
+        previewViewWidth = width
+        previewViewHeight = height
         previewBufferSize?.let { size ->
             textureView.post { applyPreviewTransform(size) }
         }
@@ -305,6 +336,9 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
                         image.close()
                         imageClosed = true
                         FileOutputStream(file).use { it.write(bytes) }
+                        check(cropPhotoToPreview(file, previewViewWidth, previewViewHeight)) {
+                            "无法裁剪拍摄照片"
+                        }
                         val savedFile = file
                         val savedCallback = saved
                         post { savedCallback(savedFile) }
@@ -512,6 +546,36 @@ class FoodCameraView(context: Context) : FrameLayout(context) {
             setScale(scale.x, scale.y, viewWidth / 2f, viewHeight / 2f)
         }
         textureView.setTransform(transform)
+    }
+
+    private fun cropPhotoToPreview(file: File, viewWidth: Int, viewHeight: Int): Boolean {
+        if (viewWidth <= 0 || viewHeight <= 0) return true
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return false
+        val crop = calculateCaptureCropRect(bitmap.width, bitmap.height, viewWidth, viewHeight)
+        if (crop.left == 0 && crop.top == 0 && crop.width == bitmap.width && crop.height == bitmap.height) {
+            bitmap.recycle()
+            return true
+        }
+        val cropped = try {
+            Bitmap.createBitmap(bitmap, crop.left, crop.top, crop.width, crop.height)
+        } catch (_: IllegalArgumentException) {
+            bitmap.recycle()
+            return false
+        }
+        val croppedFile = File(file.parentFile, "${file.name}.cropped")
+        return try {
+            FileOutputStream(croppedFile).use { output ->
+                check(cropped.compress(Bitmap.CompressFormat.JPEG, 95, output))
+            }
+            croppedFile.copyTo(file, overwrite = true)
+            true
+        } catch (_: Exception) {
+            false
+        } finally {
+            croppedFile.delete()
+            if (cropped !== bitmap) cropped.recycle()
+            bitmap.recycle()
+        }
     }
 
     private fun findBackCamera(): String? = cameraManager.cameraIdList.firstOrNull { id ->
