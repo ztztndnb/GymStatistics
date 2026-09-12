@@ -990,26 +990,33 @@ private fun FoodNutritionSummary(
             ReportMacro("蛋白质", nutrition.proteinG, Modifier.weight(1f))
             ReportMacro("脂肪", nutrition.fatG, Modifier.weight(1f))
         }
-        if (nutrients.isNotEmpty()) {
-            Text("营养信息", style = MaterialTheme.typography.titleLarge)
-            nutrients.chunked(3).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { nutrient ->
-                        Card(modifier = Modifier.weight(1f)) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 14.dp, horizontal = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                                Text("${formatNumber(nutrient.value)} ${nutrient.unit}", fontSize = 18.sp)
-                            }
-                        }
+        FoodNutritionGrid(nutrients)
+    }
+}
+
+@Composable
+private fun FoodNutritionGrid(
+    nutrients: List<FoodReportNutrient>,
+    title: String? = "营养信息",
+) {
+    if (nutrients.isEmpty()) return
+    title?.let { Text(it, style = MaterialTheme.typography.titleLarge) }
+    nutrients.chunked(3).forEach { row ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            row.forEach { nutrient ->
+                Card(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 14.dp, horizontal = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                        Text("${formatNumber(nutrient.value)} ${nutrient.unit}", fontSize = 18.sp)
                     }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -1048,6 +1055,14 @@ private fun FoodItemEditor(item: FoodAnalysisItem, onChange: (FoodAnalysisItem) 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(item.name, style = MaterialTheme.typography.titleMedium)
         Text("来源：${sourceLabel(item.nutritionSource)} · 置信度：${confidenceLabel(item.confidence)}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+        FoodNutritionEditorSection(item, onChange)
+    }
+}
+
+@Composable
+private fun FoodNutritionEditorSection(item: FoodAnalysisItem, onChange: (FoodAnalysisItem) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("营养信息", style = MaterialTheme.typography.titleLarge)
         NumericField("总重量 (g)", item.weightG) { onChange(item.copy(weightG = it)) }
         NutrientField("能量 (kcal/100g)", item, item.nutritionPer100g.energyKcal) { onChange(item.copy(nutritionPer100g = item.nutritionPer100g.copy(energyKcal = it))) }
         NutrientField("能量 (kJ/100g)", item, item.nutritionPer100g.energyKj) { onChange(item.copy(nutritionPer100g = item.nutritionPer100g.copy(energyKj = it))) }
@@ -1058,11 +1073,19 @@ private fun FoodItemEditor(item: FoodAnalysisItem, onChange: (FoodAnalysisItem) 
         NutrientField("糖 (g/100g)", item, item.nutritionPer100g.sugarsG) { onChange(item.copy(nutritionPer100g = item.nutritionPer100g.copy(sugarsG = it))) }
         NutrientField("钠 (mg/100g)", item, item.nutritionPer100g.sodiumMg) { onChange(item.copy(nutritionPer100g = item.nutritionPer100g.copy(sodiumMg = it))) }
         NutrientField("胆固醇 (mg/100g)", item, item.nutritionPer100g.cholesterolMg) { onChange(item.copy(nutritionPer100g = item.nutritionPer100g.copy(cholesterolMg = it))) }
-        FoodNutritionSummary(
-            weightG = item.weightG,
-            nutrition = FoodAnalysisCalculator.itemTotals(item),
-        )
+        FoodNutritionGrid(itemTotalNutrients(item), title = null)
     }
+}
+
+private fun itemTotalNutrients(item: FoodAnalysisItem): List<FoodReportNutrient> {
+    val totals = FoodAnalysisCalculator.itemTotals(item)
+    return listOfNotNull(
+        item.weightG?.let { FoodReportNutrient("总重量", it, "g") },
+        totals.energyKcal?.let { FoodReportNutrient("总热量", it, "kcal") },
+        totals.carbohydrateG?.let { FoodReportNutrient("碳水化合物", it, "g") },
+        totals.proteinG?.let { FoodReportNutrient("蛋白质", it, "g") },
+        totals.fatG?.let { FoodReportNutrient("脂肪", it, "g") },
+    ) + reportNutrients(totals)
 }
 
 @Composable
