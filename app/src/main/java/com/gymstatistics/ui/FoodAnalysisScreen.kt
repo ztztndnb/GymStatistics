@@ -187,6 +187,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 viewModel.clearFoodAnalysisResult()
             }
             draft != null -> {
+                report = draft
                 draft = null
                 editingItemIndex = null
             }
@@ -213,6 +214,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         IconButton(onClick = {
                             when {
                                 draft != null -> {
+                                    report = draft
                                     draft = null
                                     editingItemIndex = null
                                     viewModel.clearFoodAnalysisResult()
@@ -238,8 +240,10 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             draft != null -> FoodAnalysisEditor(
                 record = draft!!,
                 itemIndex = editingItemIndex,
-                onChange = { draft = it },
-                onSave = ::saveReport,
+                onChange = {
+                    draft = it
+                    report = it
+                },
                 modifier = Modifier.padding(padding),
             )
             report != null -> FoodAnalysisReport(
@@ -247,10 +251,6 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 imageUri = reportImageUri,
                 imageFile = historyImageFile(context, report!!),
                 onBack = ::leaveReport,
-                onEdit = {
-                    editingItemIndex = null
-                    draft = report
-                },
                 onEditItem = { index ->
                     editingItemIndex = index
                     draft = report
@@ -798,7 +798,6 @@ private fun FoodAnalysisReport(
     imageUri: Uri?,
     imageFile: File?,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
     onEditItem: (Int) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
@@ -872,7 +871,6 @@ private fun FoodAnalysisReport(
                             Text(record.foodName, style = MaterialTheme.typography.headlineSmall)
                             Text("总重量 ${formatNumber(totals.weightG)} g", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                         }
-                        TextButton(onClick = onEdit) { Text("编辑") }
                     }
                     Box(
                         Modifier
@@ -940,7 +938,7 @@ private fun FoodAnalysisReport(
                     Text("说明", style = MaterialTheme.typography.titleLarge)
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            record.uncertaintyNote.ifBlank { "营养数据由 AI 估算，可在编辑分析结果中修改重量和每 100g 营养值。" },
+                            record.uncertaintyNote.ifBlank { "营养数据由 AI 估算，可在食材明细中修改重量和每 100g 营养值。" },
                             modifier = Modifier.padding(14.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
@@ -988,8 +986,7 @@ private fun FoodAnalysisReport(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("编辑分析结果") }
-            Button(onClick = onSave, modifier = Modifier.weight(1.35f)) { Text("保存到食物分析历史") }
+            Button(onClick = onSave, modifier = Modifier.fillMaxWidth()) { Text("保存到食物分析历史") }
         }
     }
 }
@@ -1007,54 +1004,36 @@ private fun FoodAnalysisEditor(
     record: FoodAnalysisRecord,
     itemIndex: Int?,
     onChange: (FoodAnalysisRecord) -> Unit,
-    onSave: (FoodAnalysisRecord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editedRecord by remember(record.id) { mutableStateOf(record) }
-    val totals = FoodAnalysisCalculator.total(editedRecord)
-    val editableIndices = itemIndex
-        ?.takeIf { it in editedRecord.items.indices }
-        ?.let(::listOf)
-        ?: editedRecord.items.indices.toList()
     Column(modifier = modifier.fillMaxSize()) {
-        LazyColumn(modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                Text(
-                    if (itemIndex != null && itemIndex in editedRecord.items.indices) {
-                        "编辑：${editedRecord.items[itemIndex].name}"
-                    } else {
-                        editedRecord.foodName
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text("识别类型：${foodTypeLabel(editedRecord.imageType)}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                Text("总重量：${formatNumber(totals.weightG)} g", fontSize = 16.sp)
-                Text("整份能量：${formatNumber(totals.nutrition.energyKcal)} kcal", fontSize = 16.sp)
-                Text("营养数据均为每100g，可逐项修改", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                if (itemIndex != null) {
-                    Text("本次只修改这一项食材，其他食材会原样保留", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                }
-                if (editedRecord.ingredientsText.isNotBlank()) {
-                    Text("配料文字：${editedRecord.ingredientsText}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                }
-                if (editedRecord.uncertaintyNote.isNotBlank()) {
-                    Text("说明：${editedRecord.uncertaintyNote}", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                val item = itemIndex?.let(editedRecord.items::getOrNull)
+                if (item != null) {
+                    Text("总重量：${formatNumber(item.weightG)} g", fontSize = 16.sp)
+                    Text(
+                        "整份能量：${formatNumber(FoodAnalysisCalculator.itemTotals(item).energyKcal)} kcal",
+                        fontSize = 16.sp,
+                    )
                 }
             }
-            items(editableIndices, key = { it }) { index ->
-                val item = editedRecord.items[index]
-                FoodItemEditor(
-                    item = item,
-                    onChange = { changed ->
-                        val updated = replaceFoodAnalysisItem(editedRecord, index, changed)
-                        editedRecord = updated
-                        onChange(updated)
-                    },
-                )
+            itemIndex?.let { index ->
+                val editedItem = editedRecord.items.getOrNull(index)
+                if (editedItem != null) {
+                    item(key = "food-item-$index") {
+                        FoodItemEditor(
+                            item = editedItem,
+                            onChange = { changed ->
+                                val updated = replaceFoodAnalysisItem(editedRecord, index, changed)
+                                editedRecord = updated
+                                onChange(updated)
+                            },
+                        )
+                    }
+                }
             }
-        }
-        Button(onClick = { onSave(editedRecord.copy(totalWeightG = totals.weightG)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text("保存到食物分析历史")
         }
     }
 }

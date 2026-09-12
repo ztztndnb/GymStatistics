@@ -167,7 +167,6 @@ test("food result uses a photo-backed report with editable nutrients and separat
   assert.match(foodUiSource, /FoodAnalysisReport/);
   assert.match(foodUiSource, /reportNutrients/);
   assert.match(foodUiSource, /分析原图/);
-  assert.match(foodUiSource, /编辑分析结果/);
   assert.match(foodUiSource, /FoodAnalysisEditor/);
   assert.match(foodUiSource, /重量 \(g\)/);
   assert.match(foodUiSource, /kcal\/100g/);
@@ -175,6 +174,25 @@ test("food result uses a photo-backed report with editable nutrients and separat
   assert.match(foodUiSource, /FoodAnalysisCalculator\.total/);
   assert.doesNotMatch(foodUiSource, /一键记录|我要吐槽|体重管理建议/);
   assert.match(viewModelSource, /foodRepo\.saveAll/);
+});
+
+test("food analysis keeps editing and saving at the ingredient and report levels", () => {
+  const reportSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodAnalysisReport"),
+    foodUiSource.indexOf("private fun ReportMacro"),
+  );
+  const editorSource = foodUiSource.slice(
+    foodUiSource.indexOf("private fun FoodAnalysisEditor"),
+    foodUiSource.indexOf("private fun FoodItemEditor"),
+  );
+  assert.doesNotMatch(reportSource, /\bonEdit\b|编辑分析结果/);
+  assert.match(reportSource, /onEditItem/);
+  assert.match(reportSource, /onSave/);
+  assert.equal((foodUiSource.match(/保存到食物分析历史/g) ?? []).length, 1);
+  assert.doesNotMatch(editorSource, /onSave|保存到食物分析历史/);
+  assert.match(editorSource, /FoodAnalysisCalculator\.itemTotals/);
+  assert.doesNotMatch(editorSource, /识别类型|营养数据均为每100g|ingredientsText|uncertaintyNote|说明：/);
+  assert.match(foodUiSource, /onChange = \{\s*draft = it\s*report = it\s*\}/s);
 });
 
 test("food report scrolls the original image away before showing the compact header", () => {
@@ -188,8 +206,7 @@ test("food report scrolls the original image away before showing the compact hea
 test("food ingredients have isolated editor updates that are included in the saved record", () => {
   assert.match(foodUiSource, /replaceFoodAnalysisItem/);
   assert.match(foodUiSource, /editingItemIndex/);
-  assert.match(foodUiSource, /onSave\(editedRecord/);
-  assert.match(foodUiSource, /onChange = \{ draft = it \}/);
+  assert.match(foodUiSource, /onChange = \{\s*draft = it\s*report = it\s*\}/s);
   assert.match(viewModelSource, /private suspend fun persistFoodAnalysis/);
   assert.match(viewModelSource, /persistFoodAnalysis\(record\.copy\([\s\S]*?\)\)\s*\n\s*onSaved\(\)/);
 });
@@ -216,8 +233,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.12 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 29/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.12"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.12\.apk/);
+test("release metadata is 1.3.13 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 30/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.13"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.13\.apk/);
 });
