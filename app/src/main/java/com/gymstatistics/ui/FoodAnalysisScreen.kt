@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,12 +49,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,12 +66,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -82,6 +88,7 @@ import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.FoodAnalysisCalculator
 import com.gymstatistics.data.FoodAnalysisItem
 import com.gymstatistics.data.FoodAnalysisRecord
+import com.gymstatistics.data.NutritionPer100g
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -103,6 +110,10 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     val state = viewModel.uiState
     var page by remember { mutableStateOf<FoodPage?>(null) }
     var draft by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
+    var report by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
+    var reportImageUri by remember { mutableStateOf<Uri?>(null) }
+    var reportCameraFile by remember { mutableStateOf<File?>(null) }
+    var imageSaveFailure by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var showKeyDialog by remember { mutableStateOf(false) }
     var keyInput by remember { mutableStateOf("") }
     var deleteId by remember { mutableStateOf<String?>(null) }
@@ -116,7 +127,35 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
         cameraPermissionGranted = it
     }
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) viewModel.analyzeFoodImage(uri)
+        if (uri != null) {
+            reportImageUri = uri
+            reportCameraFile = null
+            viewModel.analyzeFoodImage(uri)
+        }
+    }
+
+    fun leaveReport() {
+        reportCameraFile?.delete()
+        reportCameraFile = null
+        reportImageUri = null
+        report = null
+        viewModel.clearFoodAnalysisResult()
+    }
+    fun saveReport(record: FoodAnalysisRecord) {
+        val normalized = record.copy(totalWeightG = FoodAnalysisCalculator.total(record).weightG)
+        val sourceImage = reportImageUri
+        if (sourceImage == null) {
+            viewModel.saveFoodAnalysisWithoutImage(normalized)
+            report = normalized
+            draft = null
+            return
+        }
+        viewModel.saveFoodAnalysis(
+            record = normalized,
+            sourceImage = sourceImage,
+            onImageSaveFailed = { imageSaveFailure = normalized },
+            onSaved = { leaveReport() },
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -126,10 +165,9 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     }
     LaunchedEffect(state.foodAnalysisResult?.id) {
         if (cameraEntryReady) {
-            state.foodAnalysisResult?.let {
-                capturedPhoto?.delete()
+            state.foodAnalysisResult?.let { result ->
                 capturedPhoto = null
-                draft = it
+                report = result
             }
         }
     }
@@ -139,11 +177,15 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             capturedPhoto != null -> {
                 capturedPhoto?.delete()
                 capturedPhoto = null
+                reportCameraFile = null
+                reportImageUri = null
                 viewModel.clearFoodAnalysisResult()
             }
             draft != null -> {
                 draft = null
-                viewModel.clearFoodAnalysisResult()
+            }
+            report != null -> {
+                leaveReport()
             }
             page != null -> {
                 page = null
@@ -189,10 +231,16 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             draft != null -> FoodAnalysisEditor(
                 record = draft!!,
                 onChange = { draft = it },
-                onSave = {
-                    viewModel.saveFoodAnalysis(it)
-                    draft = null
-                },
+                onSave = ::saveReport,
+                modifier = Modifier.padding(padding),
+            )
+            report != null -> FoodAnalysisReport(
+                record = report!!,
+                imageUri = reportImageUri,
+                imageFile = historyImageFile(context, report!!),
+                onBack = ::leaveReport,
+                onEdit = { draft = report },
+                onSave = { saveReport(report!!) },
                 modifier = Modifier.padding(padding),
             )
             capturedPhoto != null -> FoodPhotoConfirmation(
@@ -202,6 +250,8 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 onRetake = {
                     capturedPhoto?.delete()
                     capturedPhoto = null
+                    reportCameraFile = null
+                    reportImageUri = null
                     captureError = null
                     viewModel.clearFoodAnalysisResult()
                 },
@@ -210,8 +260,14 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         showKeyDialog = true
                     } else {
                         capturedPhoto?.let { photo ->
+                            reportCameraFile = photo
+                            reportImageUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                photo,
+                            )
                             viewModel.analyzeFoodImage(
-                                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo),
+                                reportImageUri!!,
                             )
                         }
                     }
@@ -220,7 +276,12 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             )
             page != null -> FoodAnalysisHistory(
                 records = state.foodAnalyses,
-                onOpen = { draft = it },
+                onOpen = {
+                    page = null
+                    reportImageUri = null
+                    reportCameraFile = null
+                    report = it
+                },
                 onDelete = { deleteId = it },
                 modifier = Modifier.padding(padding),
             )
@@ -321,6 +382,27 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { deleteId = null }) { Text("取消") } },
+        )
+    }
+
+    imageSaveFailure?.let { failedRecord ->
+        AlertDialog(
+            onDismissRequest = { imageSaveFailure = null },
+            title = { Text("原图保存失败") },
+            text = { Text("营养分析结果仍可保存。你可以重试保存原图，或仅保存文本分析记录。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    imageSaveFailure = null
+                    saveReport(failedRecord)
+                }) { Text("重试") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    imageSaveFailure = null
+                    viewModel.saveFoodAnalysisWithoutImage(failedRecord)
+                    leaveReport()
+                }) { Text("仅保存文本") }
+            },
         )
     }
 }
@@ -665,6 +747,218 @@ private fun CameraCornerAction(
     ) {
         Icon(icon.imageVector, contentDescription = null, tint = contentColor, modifier = Modifier.size(32.dp))
         Text(label, color = contentColor, fontSize = 13.sp)
+    }
+}
+
+private data class FoodReportNutrient(val label: String, val value: Double, val unit: String)
+
+private fun reportNutrients(nutrition: NutritionPer100g): List<FoodReportNutrient> = listOfNotNull(
+    nutrition.fiberG?.let { FoodReportNutrient("膳食纤维", it, "g") },
+    nutrition.sugarsG?.let { FoodReportNutrient("糖", it, "g") },
+    nutrition.sodiumMg?.let { FoodReportNutrient("钠", it, "mg") },
+    nutrition.cholesterolMg?.let { FoodReportNutrient("胆固醇", it, "mg") },
+)
+
+private fun historyImageFile(context: Context, record: FoodAnalysisRecord): File? = record.imageFileName
+    .takeIf(String::isNotBlank)
+    ?.let { File(context.filesDir, "food-analysis-images/$it") }
+    ?.takeIf(File::exists)
+
+private fun decodeFoodImage(context: Context, uri: Uri?, file: File?): Bitmap? {
+    if (file != null) return decodeFoodPhoto(file)
+    if (uri == null) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > 2048 || bounds.outHeight / sampleSize > 2048) sampleSize *= 2
+    return context.contentResolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sampleSize })
+    }
+}
+
+@Composable
+private fun FoodAnalysisReport(
+    record: FoodAnalysisRecord,
+    imageUri: Uri?,
+    imageFile: File?,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val totals = FoodAnalysisCalculator.total(record)
+    val listState = rememberLazyListState()
+    val compactHeader by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 120 }
+    }
+    val bitmap = remember(imageUri, imageFile) { decodeFoodImage(context, imageUri, imageFile) }
+    val nutrients = remember(totals.nutrition) { reportNutrients(totals.nutrition) }
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "分析原图",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(280.dp),
+            )
+            Box(Modifier.fillMaxWidth().height(280.dp).background(Color.Black.copy(alpha = 0.22f)))
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = if (bitmap != null) 208.dp else 0.dp)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(MaterialTheme.colorScheme.surface),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 18.dp, end = 16.dp, bottom = 98.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item {
+                Column {
+                    if (bitmap != null) {
+                        Box(
+                            Modifier
+                                .size(width = 36.dp, height = 4.dp)
+                                .align(Alignment.CenterHorizontally)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                        Spacer(Modifier.height(14.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(record.foodName, style = MaterialTheme.typography.headlineSmall)
+                            Text("总重量 ${formatNumber(totals.weightG)} g", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                        }
+                        TextButton(onClick = onEdit) { Text("编辑") }
+                    }
+                }
+            }
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Brush.horizontalGradient(listOf(Color(0xFFE9FBF4), Color(0xFFF9FFFC))))
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                ) {
+                    Text("🔥  ${formatNumber(totals.nutrition.energyKcal)} 千卡", fontSize = 30.sp)
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(vertical = 18.dp),
+                ) {
+                    ReportMacro("碳水化合物", totals.nutrition.carbohydrateG, Modifier.weight(1f))
+                    ReportMacro("蛋白质", totals.nutrition.proteinG, Modifier.weight(1f))
+                    ReportMacro("脂肪", totals.nutrition.fatG, Modifier.weight(1f))
+                }
+            }
+            if (record.items.isNotEmpty()) {
+                item { Text("食材明细", style = MaterialTheme.typography.titleLarge) }
+                items(record.items, key = { "${it.name}-${it.weightG}" }) { item ->
+                    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit)) {
+                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${formatNumber(item.weightG)} g · ${formatNumber(item.nutritionPer100g.energyKcal)} kcal/100g",
+                                    color = MaterialTheme.colorScheme.outline,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Text("›", fontSize = 24.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                }
+            }
+            if (nutrients.isNotEmpty()) {
+                item { Text("营养信息", style = MaterialTheme.typography.titleLarge) }
+                items(nutrients.chunked(3)) { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { nutrient ->
+                            Card(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(nutrient.label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                                    Text("${formatNumber(nutrient.value)} ${nutrient.unit}", fontSize = 18.sp)
+                                }
+                            }
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+            item {
+                Text("说明", style = MaterialTheme.typography.titleLarge)
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        record.uncertaintyNote.ifBlank { "营养数据由 AI 估算，可在编辑分析结果中修改重量和每 100g 营养值。" },
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+        }
+        if (compactHeader) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                    Text("🔥 ${formatNumber(totals.nutrition.energyKcal)} 千卡", color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text(record.foodName, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+            }
+        } else {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .clip(CircleShape)
+                    .background(if (bitmap != null) Color.Black.copy(alpha = 0.32f) else MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = if (bitmap != null) Color.White else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("编辑分析结果") }
+            Button(onClick = onSave, modifier = Modifier.weight(1.35f)) { Text("保存到食物分析历史") }
+        }
+    }
+}
+
+@Composable
+private fun ReportMacro(label: String, value: Double?, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("${formatNumber(value)} g", fontSize = 20.sp)
+        Text(label, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
     }
 }
 

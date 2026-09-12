@@ -57,6 +57,8 @@ data class FoodAnalysisItem(
 @Serializable
 data class FoodAnalysisRecord(
     val id: String = "",
+    @SerialName("image_file_name")
+    val imageFileName: String = "",
     @SerialName("created_at")
     val createdAt: String = "",
     @SerialName("food_name")

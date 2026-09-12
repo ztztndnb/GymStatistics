@@ -12,6 +12,7 @@ import com.gymstatistics.ai.DeepSeekFoodAnalyzer
 import com.gymstatistics.data.ExerciseRecord
 import com.gymstatistics.data.AiSettingsRepository
 import com.gymstatistics.data.FoodAnalysisRecord
+import com.gymstatistics.data.FoodAnalysisImageStore
 import com.gymstatistics.data.FoodAnalysisRepository
 import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.ImportResult
@@ -22,6 +23,7 @@ import com.gymstatistics.data.WorkoutRepository
 import com.gymstatistics.server.LanSyncServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.NetworkInterface
 import java.util.UUID
 
@@ -46,6 +48,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = WorkoutRepository(app)
     private val foodRepo = FoodAnalysisRepository(app)
+    private val imageStore = FoodAnalysisImageStore(app)
     private val aiSettings = AiSettingsRepository(app)
     private val foodAnalyzer = DeepSeekFoodAnalyzer(app)
     private var server: LanSyncServer? = null
@@ -227,7 +230,6 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                         message = error.message ?: "食物分析失败",
                     )
                 }
-                .also { cleanupFoodCameraFiles() }
         }
     }
 
@@ -235,7 +237,26 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         uiState = uiState.copy(foodAnalysisResult = null, foodAnalysisError = null)
     }
 
-    fun saveFoodAnalysis(record: FoodAnalysisRecord) {
+    fun saveFoodAnalysis(
+        record: FoodAnalysisRecord,
+        sourceImage: Uri?,
+        onImageSaveFailed: () -> Unit,
+        onSaved: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            val imageName = sourceImage?.let { withContext(Dispatchers.IO) { imageStore.save(it, record.id) } }
+            if (sourceImage != null && imageName == null) {
+                onImageSaveFailed()
+                return@launch
+            }
+            saveFoodAnalysisWithoutImage(record.copy(imageFileName = imageName ?: record.imageFileName))
+            onSaved()
+        }
+    }
+
+    fun saveFoodAnalysis(record: FoodAnalysisRecord) = saveFoodAnalysisWithoutImage(record)
+
+    fun saveFoodAnalysisWithoutImage(record: FoodAnalysisRecord) {
         val records = (uiState.foodAnalyses.filterNot { it.id == record.id } + record)
             .sortedByDescending { it.createdAt }
         uiState = uiState.copy(foodAnalyses = records, foodAnalysisResult = null, message = "已保存食物分析")
@@ -243,15 +264,13 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteFoodAnalysis(id: String) {
+        val removed = uiState.foodAnalyses.firstOrNull { it.id == id }
         val records = uiState.foodAnalyses.filterNot { it.id == id }
         uiState = uiState.copy(foodAnalyses = records, message = "已删除食物分析")
-        viewModelScope.launch { foodRepo.saveAll(records) }
-    }
-
-    private fun cleanupFoodCameraFiles() {
-        getApplication<Application>().cacheDir.listFiles()
-            ?.filter { it.name.startsWith("food-analysis-") && it.extension == "jpg" }
-            ?.forEach { it.delete() }
+        viewModelScope.launch {
+            imageStore.delete(removed?.imageFileName.orEmpty())
+            foodRepo.saveAll(records)
+        }
     }
 
     /** Turn the fatigue warning for this action on/off (persisted). */
