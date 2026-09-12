@@ -10,6 +10,12 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -101,6 +107,8 @@ import kotlinx.coroutines.withContext
 
 private enum class FoodPage { HISTORY }
 
+private enum class FoodPanel { CAMERA, CONFIRMATION, REPORT, EDITOR, HISTORY }
+
 internal enum class FoodPhotoRotation(val degrees: Float) {
     LEFT(-90f),
     RIGHT(90f),
@@ -117,6 +125,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     var report by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var reportImageUri by remember { mutableStateOf<Uri?>(null) }
     var reportCameraFile by remember { mutableStateOf<File?>(null) }
+    var reportFromHistory by remember { mutableStateOf(false) }
     var imageSaveFailure by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var showKeyDialog by remember { mutableStateOf(false) }
     var keyInput by remember { mutableStateOf("") }
@@ -132,6 +141,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     }
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
+            reportFromHistory = false
             reportImageUri = uri
             reportCameraFile = null
             viewModel.analyzeFoodImage(uri)
@@ -143,6 +153,10 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
         reportCameraFile = null
         reportImageUri = null
         report = null
+        if (reportFromHistory) {
+            page = FoodPage.HISTORY
+        }
+        reportFromHistory = false
         viewModel.clearFoodAnalysisResult()
     }
     fun saveReport(record: FoodAnalysisRecord) {
@@ -172,6 +186,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
         if (cameraEntryReady) {
             state.foodAnalysisResult?.let { result ->
                 capturedPhoto = null
+                reportFromHistory = false
                 report = result
             }
         }
@@ -196,6 +211,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             }
             page != null -> {
                 page = null
+                reportFromHistory = false
                 viewModel.clearFoodAnalysisResult()
             }
             else -> {
@@ -221,6 +237,7 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                                 }
                                 page != null -> {
                                     page = null
+                                    reportFromHistory = false
                                     viewModel.clearFoodAnalysisResult()
                                 }
                                 else -> {
@@ -236,114 +253,132 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
             }
         },
     ) { padding ->
-        when {
-            draft != null -> FoodAnalysisEditor(
-                record = draft!!,
-                itemIndex = editingItemIndex,
-                onChange = {
-                    draft = it
-                    report = it
-                },
-                modifier = Modifier.padding(padding),
-            )
-            report != null -> FoodAnalysisReport(
-                record = report!!,
-                imageUri = reportImageUri,
-                imageFile = historyImageFile(context, report!!),
-                onBack = ::leaveReport,
-                onEditItem = { index ->
-                    editingItemIndex = index
-                    draft = report
-                },
-                onSave = { saveReport(report!!) },
-                modifier = Modifier.padding(padding),
-            )
-            capturedPhoto != null -> FoodPhotoConfirmation(
-                photoFile = capturedPhoto!!,
-                loading = state.foodAnalysisLoading,
-                error = captureError ?: state.foodAnalysisError,
-                onRetake = {
-                    capturedPhoto?.delete()
-                    capturedPhoto = null
-                    reportCameraFile = null
-                    reportImageUri = null
-                    captureError = null
-                    viewModel.clearFoodAnalysisResult()
-                },
-                onConfirm = {
-                    if (!state.deepSeekKeyConfigured) {
+        val foodPanel = when {
+            draft != null -> FoodPanel.EDITOR
+            report != null -> FoodPanel.REPORT
+            capturedPhoto != null -> FoodPanel.CONFIRMATION
+            page != null -> FoodPanel.HISTORY
+            else -> FoodPanel.CAMERA
+        }
+        AnimatedContent(
+            targetState = foodPanel,
+            transitionSpec = {
+                (slideInHorizontally { it / 3 } + fadeIn()) togetherWith
+                    (slideOutHorizontally { -it / 3 } + fadeOut())
+            },
+            label = "food-analysis-panel",
+            modifier = Modifier.padding(padding).fillMaxSize(),
+        ) { panel ->
+            when (panel) {
+                FoodPanel.EDITOR -> draft?.let { currentDraft ->
+                    FoodAnalysisEditor(
+                        record = currentDraft,
+                        itemIndex = editingItemIndex,
+                        onChange = {
+                            draft = it
+                            report = it
+                        },
+                    )
+                }
+                FoodPanel.REPORT -> report?.let { currentReport ->
+                    FoodAnalysisReport(
+                        record = currentReport,
+                        imageUri = reportImageUri,
+                        imageFile = historyImageFile(context, currentReport),
+                        onBack = ::leaveReport,
+                        onEditItem = { index ->
+                            editingItemIndex = index
+                            draft = currentReport
+                        },
+                        onSave = { saveReport(currentReport) },
+                    )
+                }
+                FoodPanel.CONFIRMATION -> capturedPhoto?.let { photo ->
+                    FoodPhotoConfirmation(
+                        photoFile = photo,
+                        loading = state.foodAnalysisLoading,
+                        error = captureError ?: state.foodAnalysisError,
+                        onRetake = {
+                            capturedPhoto?.delete()
+                            capturedPhoto = null
+                            reportCameraFile = null
+                            reportImageUri = null
+                            captureError = null
+                            viewModel.clearFoodAnalysisResult()
+                        },
+                        onConfirm = {
+                            if (!state.deepSeekKeyConfigured) {
+                                showKeyDialog = true
+                            } else {
+                                capturedPhoto?.let { confirmedPhoto ->
+                                    reportCameraFile = confirmedPhoto
+                                    reportImageUri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        confirmedPhoto,
+                                    )
+                                    viewModel.analyzeFoodImage(reportImageUri!!)
+                                }
+                            }
+                        },
+                    )
+                }
+                FoodPanel.HISTORY -> FoodAnalysisHistory(
+                    records = state.foodAnalyses,
+                    onOpen = {
+                        page = null
+                        reportFromHistory = true
+                        reportImageUri = null
+                        reportCameraFile = null
+                        report = it
+                    },
+                    onDelete = { deleteId = it },
+                )
+                FoodPanel.CAMERA -> FoodCameraSurface(
+                    cameraPermissionGranted = cameraPermissionGranted,
+                    loading = state.foodAnalysisLoading,
+                    error = captureError ?: state.foodAnalysisError,
+                    onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                    onBack = {
+                        viewModel.clearFoodAnalysisResult()
+                        captureError = null
+                        onBack()
+                    },
+                    onSettings = {
+                        keyInput = ""
                         showKeyDialog = true
-                    } else {
-                        capturedPhoto?.let { photo ->
-                            reportCameraFile = photo
-                            reportImageUri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                photo,
-                            )
-                            viewModel.analyzeFoodImage(
-                                reportImageUri!!,
+                    },
+                    onGallery = {
+                        captureError = null
+                        if (state.deepSeekKeyConfigured) galleryPicker.launch("image/*") else showKeyDialog = true
+                    },
+                    onCapture = { cameraView ->
+                        if (!cameraPermissionGranted) {
+                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        } else if (!state.deepSeekKeyConfigured) {
+                            showKeyDialog = true
+                        } else if (cameraView == null) {
+                            captureError = "相机正在启动，请稍后再试"
+                        } else if (!state.foodAnalysisLoading) {
+                            captureError = null
+                            val file = createFoodCameraFile(context)
+                            cameraView.takePicture(
+                                file,
+                                onSaved = { capturedPhoto = file },
+                                onError = {
+                                    file.delete()
+                                    captureError = "拍照失败：$it"
+                                },
                             )
                         }
-                    }
-                },
-                modifier = Modifier.padding(padding),
-            )
-            page != null -> FoodAnalysisHistory(
-                records = state.foodAnalyses,
-                onOpen = {
-                    page = null
-                    reportImageUri = null
-                    reportCameraFile = null
-                    report = it
-                },
-                onDelete = { deleteId = it },
-                modifier = Modifier.padding(padding),
-            )
-            else -> FoodCameraSurface(
-                cameraPermissionGranted = cameraPermissionGranted,
-                loading = state.foodAnalysisLoading,
-                error = captureError ?: state.foodAnalysisError,
-                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                onBack = {
-                    viewModel.clearFoodAnalysisResult()
-                    captureError = null
-                    onBack()
-                },
-                onSettings = {
-                    keyInput = ""
-                    showKeyDialog = true
-                },
-                onGallery = {
-                    captureError = null
-                    if (state.deepSeekKeyConfigured) galleryPicker.launch("image/*") else showKeyDialog = true
-                },
-                onCapture = { cameraView ->
-                    if (!cameraPermissionGranted) {
-                        permissionLauncher.launch(Manifest.permission.CAMERA)
-                    } else if (!state.deepSeekKeyConfigured) {
-                        showKeyDialog = true
-                    } else if (cameraView == null) {
-                        captureError = "相机正在启动，请稍后再试"
-                    } else if (!state.foodAnalysisLoading) {
-                        captureError = null
-                        val file = createFoodCameraFile(context)
-                        cameraView.takePicture(
-                            file,
-                            onSaved = { capturedPhoto = file },
-                            onError = {
-                                file.delete()
-                                captureError = "拍照失败：$it"
-                            },
-                        )
-                    }
-                },
-                onHistory = {
-                    viewModel.clearFoodAnalysisResult()
-                    page = FoodPage.HISTORY
-                },
-                modifier = Modifier.padding(padding),
-            )
+                    },
+                    onHistory = {
+                        viewModel.clearFoodAnalysisResult()
+                        reportFromHistory = false
+                        page = FoodPage.HISTORY
+                    },
+                )
+            }
         }
     }
 

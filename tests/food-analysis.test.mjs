@@ -264,13 +264,35 @@ test("food report nutrition cards center their content across the full card widt
   assert.match(foodUiSource, /Column\(\s*modifier = Modifier\s*\.fillMaxWidth\(\)\s*\.padding\(vertical = 14\.dp, horizontal = 6\.dp\),\s*horizontalAlignment = Alignment\.CenterHorizontally,/s);
 });
 
+test("food report and ingredient editor use animated panel transitions", () => {
+  assert.match(foodUiSource, /private enum class FoodPanel/);
+  assert.match(foodUiSource, /AnimatedContent\(\s*targetState = foodPanel/s);
+  assert.match(foodUiSource, /label = "food-analysis-panel"/);
+  assert.match(foodUiSource, /modifier = Modifier\.padding\(padding\)\.fillMaxSize\(\)/);
+  assert.match(foodUiSource, /FoodPanel\.REPORT/);
+  assert.match(foodUiSource, /FoodPanel\.EDITOR/);
+});
+
+test("opening a report from food history returns to history instead of the camera", () => {
+  assert.match(foodUiSource, /var reportFromHistory by remember/);
+  assert.match(foodUiSource, /reportFromHistory = true/);
+  assert.match(foodUiSource, /if \(reportFromHistory\) \{[\s\S]*page = FoodPage\.HISTORY/s);
+});
+
+test("food prompt asks to search reliable chain-brand nutrition data before estimating", () => {
+  assert.match(promptSource, /连锁品牌/);
+  assert.match(promptSource, /联网|检索/);
+  assert.match(promptSource, /官方|可靠公开/);
+  assert.match(promptSource, /不能直接凭印象猜测|不得直接凭印象猜测/);
+});
+
 test("camera uses a FileProvider and no barcode scanner dependency is introduced", () => {
   assert.match(manifestSource, /FileProvider/);
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.15 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 32/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.15"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.15\.apk/);
+test("release metadata is 1.3.16 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 33/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.16"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.16\.apk/);
 });
