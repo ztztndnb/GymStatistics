@@ -177,13 +177,28 @@ test("food result uses a photo-backed report with editable nutrients and separat
   assert.match(viewModelSource, /foodRepo\.saveAll/);
 });
 
+test("food report scrolls the original image away before showing the compact header", () => {
+  assert.match(foodUiSource, /if \(bitmap != null\) \{\s*item(?:\(key = "analysis-image"\))? \{/s);
+  assert.match(foodUiSource, /compactHeaderIndex = if \(bitmap != null\) 3 else 2/);
+  assert.match(foodUiSource, /firstVisibleItemIndex >= compactHeaderIndex/);
+  assert.doesNotMatch(foodUiSource, /padding\(top = if \(bitmap != null\) 208\.dp else 0\.dp\)/);
+});
+
+test("food ingredients have isolated editor updates that are included in the saved record", () => {
+  assert.match(foodUiSource, /replaceFoodAnalysisItem/);
+  assert.match(foodUiSource, /editingItemIndex/);
+  assert.match(foodUiSource, /onSave\(editedRecord/);
+  assert.match(viewModelSource, /private suspend fun persistFoodAnalysis/);
+  assert.match(viewModelSource, /persistFoodAnalysis\(record\.copy\(/);
+});
+
 test("camera uses a FileProvider and no barcode scanner dependency is introduced", () => {
   assert.match(manifestSource, /FileProvider/);
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.9 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 26/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.9"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.9\.apk/);
+test("release metadata is 1.3.10 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 27/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.10"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.10\.apk/);
 });

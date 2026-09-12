@@ -23,8 +23,8 @@ android {
         applicationId = "com.gymstatistics"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.3.9"
+        versionCode = 27
+        versionName = "1.3.10"
     }
 
     signingConfigs {
