@@ -178,9 +178,10 @@ test("food result uses a photo-backed report with editable nutrients and separat
 });
 
 test("food report scrolls the original image away before showing the compact header", () => {
-  assert.match(foodUiSource, /if \(bitmap != null\) \{\s*item(?:\(key = "analysis-image"\))? \{/s);
-  assert.match(foodUiSource, /compactHeaderIndex = if \(bitmap != null\) 3 else 2/);
-  assert.match(foodUiSource, /firstVisibleItemIndex >= compactHeaderIndex/);
+  assert.match(foodUiSource, /verticalScroll\(scrollState\)/);
+  assert.match(foodUiSource, /bitmap != null\) \{\s*Box\(Modifier\.fillMaxWidth\(\)\.height\(280\.dp\)\)/s);
+  assert.match(foodUiSource, /energyBottomPx = position\.y \+ it\.size\.height/);
+  assert.match(foodUiSource, /energyBottomPx\.isFinite\(\)/);
   assert.doesNotMatch(foodUiSource, /padding\(top = if \(bitmap != null\) 208\.dp else 0\.dp\)/);
 });
 
@@ -188,8 +189,16 @@ test("food ingredients have isolated editor updates that are included in the sav
   assert.match(foodUiSource, /replaceFoodAnalysisItem/);
   assert.match(foodUiSource, /editingItemIndex/);
   assert.match(foodUiSource, /onSave\(editedRecord/);
+  assert.match(foodUiSource, /onChange = \{ draft = it \}/);
   assert.match(viewModelSource, /private suspend fun persistFoodAnalysis/);
-  assert.match(viewModelSource, /persistFoodAnalysis\(record\.copy\(/);
+  assert.match(viewModelSource, /persistFoodAnalysis\(record\.copy\([\s\S]*?\)\)\s*\n\s*onSaved\(\)/);
+});
+
+test("food report keeps its rounded body while the image and report scroll together", () => {
+  assert.match(foodUiSource, /verticalScroll\(scrollState\)/);
+  assert.match(foodUiSource, /RoundedCornerShape\(topStart = 28\.dp, topEnd = 28\.dp\)/);
+  assert.match(foodUiSource, /onGloballyPositioned/);
+  assert.doesNotMatch(foodUiSource, /rememberLazyListState\(\)/);
 });
 
 test("camera uses a FileProvider and no barcode scanner dependency is introduced", () => {
@@ -197,8 +206,8 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.10 with the requested APK name", () => {
-  assert.match(source("app/build.gradle.kts"), /versionCode = 27/);
-  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.10"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.10\.apk/);
+test("release metadata is 1.3.11 with the requested APK name", () => {
+  assert.match(source("app/build.gradle.kts"), /versionCode = 28/);
+  assert.match(source("app/build.gradle.kts"), /versionName = "1\.3\.11"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.11\.apk/);
 });
