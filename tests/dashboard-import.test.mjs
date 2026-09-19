@@ -81,6 +81,17 @@ test("dashboard import parser accepts the phone sync payload", () => {
   assert.equal(sessions[0].date, "2026-09-07");
 });
 
+test("dashboard sync payload tolerates an optional training plan", () => {
+  const { context } = createDashboard(async () => ({ ok: true, json: async () => ({ sessions: [] }) }));
+  const sessions = context.GymStatisticsImport.parseSessions(JSON.stringify({
+    exportedAt: "2026-09-19T12:00:00+08:00",
+    trainingPlan: { name: "力量周计划", days: [] },
+    sessions: [{ id: "s1", date: "2026-09-19", exercises: [] }],
+  }));
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].id, "s1");
+});
+
 test("Android file import decodes UTF-8 bytes and removes an optional BOM", () => {
   assert.match(gymAppSource, /readBytes\(\)\.toString\(Charsets\.UTF_8\)\.removePrefix\("\\uFEFF"\)/);
 });

@@ -8,6 +8,7 @@ import com.gymstatistics.data.ImportResponse
 import com.gymstatistics.data.ImportResult
 import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.SyncPayload
+import com.gymstatistics.data.TrainingPlan
 import com.gymstatistics.data.WorkoutData
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
@@ -25,7 +26,7 @@ class LanSyncServer(
     context: Context,
     private val port: Int,
     private val dataProvider: () -> WorkoutData,
-    private val importHandler: (List<SessionRecord>, ImportMode, Boolean) -> ImportResult,
+    private val importHandler: (List<SessionRecord>, ImportMode, Boolean, TrainingPlan?) -> ImportResult,
 ) : NanoHTTPD("0.0.0.0", port) {
 
     private val dashboardHtml: String = try {
@@ -51,12 +52,20 @@ class LanSyncServer(
                 respond(Status.OK, "application/json; charset=utf-8", """{"status":"ok"}""")
 
             "/api/workouts" -> {
-                val payload = SyncPayload(exportedAt = nowIso(), sessions = dataProvider().sessions)
+                val payload = SyncPayload(
+                    exportedAt = nowIso(),
+                    sessions = dataProvider().sessions,
+                    trainingPlan = dataProvider().trainingPlan,
+                )
                 respond(Status.OK, "application/json; charset=utf-8", AppJson.json.encodeToString(SyncPayload.serializer(), payload))
             }
 
             "/api/export.json" -> {
-                val payload = SyncPayload(exportedAt = nowIso(), sessions = dataProvider().sessions)
+                val payload = SyncPayload(
+                    exportedAt = nowIso(),
+                    sessions = dataProvider().sessions,
+                    trainingPlan = dataProvider().trainingPlan,
+                )
                 respond(Status.OK, "application/json; charset=utf-8", AppJson.json.encodeToString(SyncPayload.serializer(), payload), attachmentName("json"))
             }
 
@@ -79,7 +88,7 @@ class LanSyncServer(
             if (body.isBlank()) return respond(Status.BAD_REQUEST, "application/json; charset=utf-8", """{"error":"empty body"}""")
             val req = AppJson.json.decodeFromString(ImportRequest.serializer(), body)
             val mode = if (req.mode == "date" && req.date != null) ImportMode.DATE(req.date) else ImportMode.ALL
-            val r = importHandler(req.sessions, mode, req.overwriteDuplicates)
+            val r = importHandler(req.sessions, mode, req.overwriteDuplicates, req.trainingPlan)
             val resp = ImportResponse(r.added, r.duplicates, r.skipped, r.overwritten)
             respond(Status.OK, "application/json; charset=utf-8", AppJson.json.encodeToString(ImportResponse.serializer(), resp))
         } catch (e: Exception) {

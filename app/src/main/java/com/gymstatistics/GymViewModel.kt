@@ -18,8 +18,14 @@ import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.ImportResult
 import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.SessionRecord
+import com.gymstatistics.data.PlannedExercise
+import com.gymstatistics.data.TrainingPlan
+import com.gymstatistics.data.TrainingPlanDay
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.WorkoutRepository
+import com.gymstatistics.data.completedPlanExerciseIds
+import com.gymstatistics.data.exerciseRecordForPlan
+import com.gymstatistics.data.planDayIndex
 import com.gymstatistics.server.LanSyncServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -147,12 +153,125 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         uiState = uiState.copy(message = "已保存 ${exercise.name}")
     }
 
+    fun saveTrainingPlan(plan: TrainingPlan) {
+        val normalizedDays = (1..7).map { weekday ->
+            plan.days.firstOrNull { it.weekday == weekday } ?: TrainingPlanDay(weekday)
+        }
+        persist(uiState.data.copy(trainingPlan = plan.copy(days = normalizedDays)))
+        uiState = uiState.copy(message = "训练计划已保存")
+    }
+
+    fun addPlannedExercise(weekday: Int, exercise: PlannedExercise) {
+        if (weekday !in 1..7 || exercise.name.isBlank()) {
+            uiState = uiState.copy(message = "请填写计划动作名称")
+            return
+        }
+        val plan = uiState.data.trainingPlan ?: TrainingPlan()
+        val day = plan.days.firstOrNull { it.weekday == weekday } ?: TrainingPlanDay(weekday)
+        val idAlreadyUsed = plan.days.any { candidate -> candidate.exercises.any { it.id == exercise.id } }
+        val withId = exercise.copy(
+            id = if (exercise.id.isBlank() || idAlreadyUsed) UUID.randomUUID().toString() else exercise.id,
+            name = exercise.name.trim(),
+        )
+        saveTrainingPlan(plan.copy(days = plan.days.map { if (it.weekday == weekday) day.copy(exercises = day.exercises + withId) else it }))
+    }
+
+    fun updatePlannedExercise(weekday: Int, exercise: PlannedExercise) {
+        if (weekday !in 1..7 || exercise.name.isBlank()) {
+            uiState = uiState.copy(message = "请填写计划动作名称")
+            return
+        }
+        val plan = uiState.data.trainingPlan ?: TrainingPlan()
+        if (plan.days.any { day -> day.weekday != weekday && day.exercises.any { it.id == exercise.id } }) {
+            uiState = uiState.copy(message = "计划动作 ID 重复，无法保存")
+            return
+        }
+        saveTrainingPlan(plan.copy(days = plan.days.map { day ->
+            if (day.weekday != weekday) day else day.copy(
+                exercises = day.exercises.map { if (it.id == exercise.id) exercise.copy(name = exercise.name.trim()) else it },
+            )
+        }))
+    }
+
+    fun deletePlannedExercise(weekday: Int, plannedExerciseId: String) {
+        val plan = uiState.data.trainingPlan ?: return
+        saveTrainingPlan(plan.copy(days = plan.days.map { day ->
+            if (day.weekday == weekday) day.copy(exercises = day.exercises.filterNot { it.id == plannedExerciseId }) else day
+        }))
+    }
+
+    fun reorderPlannedExercises(weekday: Int, plannedExerciseId: String, direction: Int) {
+        val plan = uiState.data.trainingPlan ?: return
+        val updatedDays = plan.days.map { day ->
+            if (day.weekday != weekday) return@map day
+            val index = day.exercises.indexOfFirst { it.id == plannedExerciseId }
+            val target = index + direction
+            if (index < 0 || target !in day.exercises.indices) return@map day
+            val exercises = day.exercises.toMutableList()
+            val moved = exercises.removeAt(index)
+            exercises.add(target, moved)
+            day.copy(exercises = exercises)
+        }
+        saveTrainingPlan(plan.copy(days = updatedDays))
+    }
+
+    fun copyTrainingPlanDay(sourceWeekday: Int, targetWeekday: Int) {
+        if (sourceWeekday !in 1..7 || targetWeekday !in 1..7 || sourceWeekday == targetWeekday) return
+        val plan = uiState.data.trainingPlan ?: return
+        val source = plan.days.firstOrNull { it.weekday == sourceWeekday } ?: return
+        val copied = com.gymstatistics.data.copyPlanDay(source, targetWeekday)
+        saveTrainingPlan(plan.copy(days = plan.days.map { if (it.weekday == targetWeekday) copied else it }))
+    }
+
+    fun setPlanRestDay(weekday: Int, restDay: Boolean) {
+        val plan = uiState.data.trainingPlan ?: TrainingPlan()
+        saveTrainingPlan(plan.copy(days = plan.days.map { if (it.weekday == weekday) it.copy(restDay = restDay) else it }))
+    }
+
+    fun completePlannedExercise(date: String, plannedExerciseId: String) {
+        val parsedDate = runCatching { java.time.LocalDate.parse(date) }.getOrNull() ?: return
+        val plan = uiState.data.trainingPlan ?: return
+        val day = plan.days.firstOrNull { it.weekday == planDayIndex(parsedDate) } ?: return
+        val planned = day.exercises.firstOrNull { it.id == plannedExerciseId } ?: return
+        val existing = uiState.data.sessions.firstOrNull { it.date == date }
+        if (plannedExerciseId in completedPlanExerciseIds(existing)) {
+            uiState = uiState.copy(message = "该计划动作已记录")
+            return
+        }
+        val record = exerciseRecordForPlan(planned, UUID.randomUUID().toString())
+        val sessions = if (existing == null) {
+            uiState.data.sessions + SessionRecord(UUID.randomUUID().toString(), date, exercises = listOf(record))
+        } else {
+            uiState.data.sessions.map { if (it.id == existing.id) it.copy(exercises = it.exercises + record) else it }
+        }
+        persist(uiState.data.copy(sessions = sessions))
+        uiState = uiState.copy(message = "已记录计划动作 ${planned.name}")
+    }
+
+    fun associateExerciseWithPlan(date: String, exerciseId: String, plannedExerciseId: String) {
+        val current = uiState.data
+        val session = current.sessions.firstOrNull { it.date == date } ?: return
+        if (plannedExerciseId in completedPlanExerciseIds(session)) {
+            uiState = uiState.copy(message = "该计划动作已关联其他记录")
+            return
+        }
+        val exercise = session.exercises.firstOrNull { it.id == exerciseId } ?: return
+        val changed = session.copy(exercises = session.exercises.map {
+            if (it.id == exercise.id) it.copy(plannedExerciseId = plannedExerciseId) else it
+        })
+        persist(current.copy(sessions = current.sessions.map { if (it.id == session.id) changed else it }))
+        uiState = uiState.copy(message = "已关联计划动作")
+    }
+
     /** Update a single action; its muscle selection applies to every same-name action. */
     fun updateExercise(date: String, exerciseId: String, updated: ExerciseRecord, note: String) {
         val current = uiState.data
         val session = current.sessions.find { it.date == date } ?: return
         val newExercises = session.exercises.map {
-            if (it.id == exerciseId) updated.copy(id = exerciseId, note = note.trim()) else it
+            if (it.id == exerciseId) {
+                val edited = updated.copy(id = exerciseId, note = note.trim())
+                edited.copy(plannedExerciseId = updated.plannedExerciseId ?: it.plannedExerciseId)
+            } else it
         }
         val newSession = session.copy(exercises = newExercises)
         val changedSessions = current.sessions.map { if (it.id == session.id) newSession else it }
@@ -285,7 +404,12 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Import sessions from an external source (a file or a PC POST), handling duplicates. */
-    fun importSessions(incoming: List<SessionRecord>, mode: ImportMode, overwriteDuplicates: Boolean): ImportResult {
+    fun importSessions(
+        incoming: List<SessionRecord>,
+        mode: ImportMode,
+        overwriteDuplicates: Boolean,
+        trainingPlan: TrainingPlan? = null,
+    ): ImportResult {
         val current = uiState.data
         val sessions = current.sessions.toMutableList()
         val usedExerciseIds = sessions
@@ -321,7 +445,10 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 added += inc.size
             }
         }
-        val newData = current.copy(sessions = sessions)
+        val newData = current.copy(
+            sessions = sessions,
+            trainingPlan = if (mode is ImportMode.ALL && trainingPlan != null) trainingPlan else current.trainingPlan,
+        )
         persist(newData)
         uiState = uiState.copy(message = "已导入:新增 $added 条,重复 $duplicates 条(跳过 $skipped/合并 $overwritten)")
         return ImportResult(added, duplicates, skipped, overwritten)
@@ -345,8 +472,8 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
             if (server == null) {
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        val s = LanSyncServer(getApplication(), SYNC_PORT, { uiState.data }) { incoming, mode, overwrite ->
-                            importSessions(incoming, mode, overwrite)
+                        val s = LanSyncServer(getApplication(), SYNC_PORT, { uiState.data }) { incoming, mode, overwrite, trainingPlan ->
+                            importSessions(incoming, mode, overwrite, trainingPlan)
                         }
                         s.start(500, false)
                         server = s
