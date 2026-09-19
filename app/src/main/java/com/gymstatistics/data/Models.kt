@@ -23,6 +23,7 @@ data class ExerciseRecord(
     val sets: Int? = null,    // 组数
     val note: String = "",    // 该动作的备注
     val muscles: List<MuscleSelection> = emptyList(),
+    val plannedExerciseId: String? = null,
 )
 
 /** A workout for a given day. */
@@ -41,6 +42,7 @@ data class WorkoutData(
     val sessions: List<SessionRecord> = emptyList(),
     /** Actions whose fatigue warning has been turned off. */
     val suppressedFatigue: Set<String> = emptySet(),
+    val trainingPlan: TrainingPlan? = null,
 )
 
 /** Payload served by the embedded sync server for the PC dashboard. */
@@ -48,6 +50,7 @@ data class WorkoutData(
 data class SyncPayload(
     val exportedAt: String,
     val sessions: List<SessionRecord>,
+    val trainingPlan: TrainingPlan? = null,
 )
 
 /** How an import is scoped. */
@@ -71,6 +74,7 @@ data class ImportRequest(
     val date: String? = null,
     val overwriteDuplicates: Boolean = false,
     val sessions: List<SessionRecord> = emptyList(),
+    val trainingPlan: TrainingPlan? = null,
 )
 
 /** Response of a POST /api/import. */

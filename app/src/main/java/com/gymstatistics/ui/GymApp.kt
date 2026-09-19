@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -114,11 +115,17 @@ import com.gymstatistics.data.ImportMode
 import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.SessionRecord
 import com.gymstatistics.data.SyncPayload
+import com.gymstatistics.data.PlannedExercise
+import com.gymstatistics.data.TrainingPlan
+import com.gymstatistics.data.TrainingPlanDay
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
 import com.gymstatistics.data.fatigueWarningsFor
+import com.gymstatistics.data.completedPlanExerciseIds
+import com.gymstatistics.data.latestExerciseForName
+import com.gymstatistics.data.planDayIndex
 import android.icu.text.Transliterator
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.coroutines.launch
@@ -132,7 +139,9 @@ import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private enum class Screen { MAIN, HISTORY, SYNC, FOOD }
+private enum class Screen { MAIN, PLAN, HISTORY, SYNC, FOOD }
+
+private enum class WorkoutMode { MANUAL, PLAN }
 
 private const val MIN_SWIPE_DISTANCE = 100f
 private const val MIN_FLING_VELOCITY = 1000f
@@ -145,11 +154,13 @@ fun GymApp(viewModel: GymViewModel) {
     var screen by remember { mutableStateOf(Screen.MAIN) }
     var historySelected by remember { mutableStateOf<String?>(null) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var workoutMode by remember { mutableStateOf(WorkoutMode.MANUAL) }
     var showCalendar by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
     var editingExerciseId by remember { mutableStateOf<String?>(null) }
     var prefillExercise by remember { mutableStateOf<ExerciseRecord?>(null) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
+    var pendingPlanAssociation by remember { mutableStateOf<Pair<String, String>?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var dragDirection by remember { mutableStateOf(0) }
     var lastDragDirection by remember { mutableStateOf(0) }
@@ -180,6 +191,7 @@ fun GymApp(viewModel: GymViewModel) {
                             actions = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") }
+                                    TextButton(onClick = { screen = Screen.PLAN }) { Text("训练计划") }
                                     IconButton(
                                         onClick = { screen = Screen.FOOD },
                                         modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
@@ -203,6 +215,7 @@ fun GymApp(viewModel: GymViewModel) {
                     ) {
                         DatePickerHeader(selectedDate = selectedDate, onOpenCalendar = { showCalendar = true })
                         WeekDayBar(selectedDate = selectedDate, onSelect = { selectedDate = it })
+                        WorkoutModeSwitch(selected = workoutMode, onSelected = { workoutMode = it })
                         BoxWithConstraints(
                             modifier = Modifier
                                 .weight(1f)
@@ -263,24 +276,30 @@ fun GymApp(viewModel: GymViewModel) {
                             val contentOffset = if (isSettling) settleOffset.value else dragOffset
                             Box(Modifier.fillMaxSize()) {
                                 if (dragDirection != 0) {
-                                    WorkoutDayContent(
+                                    DayModeContent(
+                                        mode = workoutMode,
                                         date = selectedDate.plusDays(dragDirection.toLong()),
                                         sessions = state.data.sessions,
+                                        plan = state.data.trainingPlan,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
                                         onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                         onDelete = { confirmDeleteId = it },
+                                        onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                     )
                                 }
-                                WorkoutDayContent(
+                                DayModeContent(
+                                    mode = workoutMode,
                                     date = selectedDate,
                                     sessions = state.data.sessions,
+                                    plan = state.data.trainingPlan,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .graphicsLayer { translationX = contentOffset },
-                                    onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
-                                    onDelete = { confirmDeleteId = it },
+                                        onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                        onDelete = { confirmDeleteId = it },
+                                        onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
                                 )
                             }
                         }
@@ -317,7 +336,15 @@ fun GymApp(viewModel: GymViewModel) {
                         onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
                         onConfirm = { date, note, exercise ->
                             if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
-                            else viewModel.addExercise(date, note, exercise)
+                            else {
+                                val planDay = state.data.trainingPlan?.days?.firstOrNull { it.weekday == planDayIndex(selectedDate) }
+                                val completed = completedPlanExerciseIds(state.data.sessions.firstOrNull { it.date == date })
+                                val matchingPlan = planDay?.exercises?.firstOrNull {
+                                    it.name == exercise.name && it.id !in completed && exercise.plannedExerciseId == null
+                                }
+                                viewModel.addExercise(date, note, exercise)
+                                if (matchingPlan != null) pendingPlanAssociation = exercise.id to matchingPlan.id
+                            }
                             showAdd = false; editingExerciseId = null; prefillExercise = null
                         },
                     )
@@ -347,10 +374,28 @@ fun GymApp(viewModel: GymViewModel) {
                 },
             )
 
+            Screen.PLAN -> TrainingPlanPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
+
             Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
 
             Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { screen = Screen.MAIN })
         }
+    }
+
+    val association = pendingPlanAssociation
+    if (association != null) {
+        AlertDialog(
+            onDismissRequest = { pendingPlanAssociation = null },
+            title = { Text("关联训练计划") },
+            text = { Text("检测到同名的计划动作，是否将本次手动记录关联到计划？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.associateExerciseWithPlan(selectedDate.toString(), association.first, association.second)
+                    pendingPlanAssociation = null
+                }) { Text("关联") }
+            },
+            dismissButton = { TextButton(onClick = { pendingPlanAssociation = null }) { Text("暂不关联") } },
+        )
     }
 
     LaunchedEffect(state.message) {
@@ -392,6 +437,159 @@ private fun WorkoutDayContent(
         }
     }
 }
+
+@Composable
+private fun DayModeContent(
+    mode: WorkoutMode,
+    date: LocalDate,
+    sessions: List<SessionRecord>,
+    plan: TrainingPlan?,
+    modifier: Modifier = Modifier,
+    onEdit: (ExerciseRecord) -> Unit,
+    onDelete: (String) -> Unit,
+    onCompletePlan: (String) -> Unit,
+) {
+    if (mode == WorkoutMode.MANUAL) {
+        WorkoutDayContent(
+            date = date,
+            sessions = sessions,
+            modifier = modifier,
+            onEdit = onEdit,
+            onDelete = onDelete,
+        )
+    } else {
+        PlannedDayContent(
+            date = date,
+            sessions = sessions,
+            plan = plan,
+            modifier = modifier,
+            onComplete = onCompletePlan,
+        )
+    }
+}
+
+@Composable
+private fun PlannedDayContent(
+    date: LocalDate,
+    sessions: List<SessionRecord>,
+    plan: TrainingPlan?,
+    modifier: Modifier = Modifier,
+    onComplete: (String) -> Unit,
+) {
+    val day = plan?.days?.firstOrNull { it.weekday == planDayIndex(date) }
+    val completed = completedPlanExerciseIds(sessions.firstOrNull { it.date == date.toString() })
+    if (day == null || (day.exercises.isEmpty() && !day.restDay)) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text("这一天还没有训练计划", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+        }
+        return
+    }
+    Column(modifier = modifier) {
+        Text(
+            if (day.restDay) "${planWeekdayLabel(day.weekday)} · 休息日" else "${planWeekdayLabel(day.weekday)} · 计划动作",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.outline,
+            fontSize = 13.sp,
+        )
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            itemsIndexed(day.exercises, key = { index, exercise -> "${exercise.id}#$index" }) { _, exercise ->
+                PlannedExerciseCard(
+                    exercise = exercise,
+                    completed = exercise.id in completed,
+                    onComplete = { onComplete(exercise.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlannedExerciseCard(
+    exercise: PlannedExercise,
+    completed: Boolean,
+    onComplete: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        if (completed) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(exercise.name, modifier = Modifier.weight(1f).padding(start = 8.dp), color = MaterialTheme.colorScheme.outline)
+                Text("已完成", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+            }
+        } else {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(exercise.name, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        exerciseLine(exercise),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    exercise.note.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+                Button(onClick = onComplete) { Text("完成并记录") }
+            }
+        }
+    }
+}
+
+private fun exerciseLine(ex: PlannedExercise): String = exerciseLine(
+    ExerciseRecord(
+        name = ex.name,
+        data = ex.data,
+        unit = ex.unit,
+        count = ex.count,
+        sets = ex.sets,
+        note = ex.note,
+        muscles = ex.muscles,
+    )
+)
+
+@Composable
+private fun WorkoutModeSwitch(selected: WorkoutMode, onSelected: (WorkoutMode) -> Unit) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp),
+    ) {
+        val segmentWidth = maxWidth / 2
+        val selectedX by animateDpAsState(
+            targetValue = if (selected == WorkoutMode.MANUAL) 0.dp else segmentWidth,
+            animationSpec = tween(220),
+            label = "workout-mode-slider",
+        )
+        Box(
+            modifier = Modifier
+                .offset(x = selectedX)
+                .width(segmentWidth)
+                .height(36.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { onSelected(WorkoutMode.MANUAL) }, modifier = Modifier.weight(1f)) {
+                Text("手动模式", color = if (selected == WorkoutMode.MANUAL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { onSelected(WorkoutMode.PLAN) }, modifier = Modifier.weight(1f)) {
+                Text("计划模式", color = if (selected == WorkoutMode.PLAN) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun planWeekdayLabel(weekday: Int): String =
+    listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日").getOrElse(weekday) { "星期$weekday" }
 
 // ---------- Date selection (week bar + month calendar) ----------
 
@@ -605,6 +803,205 @@ private fun MonthCalendarDialog(
     )
 }
 
+// ---------- Training plan ----------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
+    val state = viewModel.uiState
+    val plan = state.data.trainingPlan ?: TrainingPlan()
+    var editing by remember { mutableStateOf<Pair<Int, PlannedExercise?>?>(null) }
+    var historyPickerDay by remember { mutableStateOf<Int?>(null) }
+
+    BackHandler { onBack() }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("训练计划", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                },
+            )
+        },
+    ) { padding ->
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 12.dp)) {
+            item {
+                Text(
+                    "每周计划会重复使用；在主界面切换到计划模式后，可逐项完成并记录。",
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 13.sp,
+                )
+            }
+            items((1..7).toList(), key = { it }) { weekday ->
+                val day = plan.days.firstOrNull { it.weekday == weekday } ?: TrainingPlanDay(weekday)
+                PlanDayEditor(
+                    day = day,
+                    onRestDayChange = { viewModel.setPlanRestDay(weekday, it) },
+                    onAdd = { editing = weekday to null },
+                    onAddFromHistory = { historyPickerDay = weekday },
+                    onEdit = { editing = weekday to it },
+                    onDelete = { viewModel.deletePlannedExercise(weekday, it) },
+                    onMove = { id, direction -> viewModel.reorderPlannedExercises(weekday, id, direction) },
+                    onCopyNext = { viewModel.copyTrainingPlanDay(weekday, if (weekday == 7) 1 else weekday + 1) },
+                )
+            }
+            item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+
+    editing?.let { (weekday, initial) ->
+        PlannedExerciseEditorDialog(
+            initial = initial,
+            onDismiss = { editing = null },
+            onConfirm = { exercise ->
+                if (initial == null) viewModel.addPlannedExercise(weekday, exercise)
+                else viewModel.updatePlannedExercise(weekday, exercise)
+                editing = null
+            },
+        )
+    }
+
+    historyPickerDay?.let { weekday ->
+        HistoryExercisePicker(
+            sessions = state.data.sessions,
+            onDismiss = { historyPickerDay = null },
+            onPick = { exercise ->
+                viewModel.addPlannedExercise(weekday, exercise)
+                historyPickerDay = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun PlanDayEditor(
+    day: TrainingPlanDay,
+    onRestDayChange: (Boolean) -> Unit,
+    onAdd: () -> Unit,
+    onAddFromHistory: () -> Unit,
+    onEdit: (PlannedExercise) -> Unit,
+    onDelete: (String) -> Unit,
+    onMove: (String, Int) -> Unit,
+    onCopyNext: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(planWeekdayLabel(day.weekday), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("休息日", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Switch(checked = day.restDay, onCheckedChange = onRestDayChange)
+            }
+            if (day.restDay) {
+                Text("当天不安排计划动作", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+            }
+            day.exercises.forEachIndexed { index, exercise ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
+                        Text(exercise.name, fontWeight = FontWeight.SemiBold)
+                        Text(exerciseLine(exercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                    IconButton(onClick = { onMove(exercise.id, -1) }, enabled = index > 0) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上移")
+                    }
+                    IconButton(onClick = { onMove(exercise.id, 1) }, enabled = index < day.exercises.lastIndex) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下移")
+                    }
+                    IconButton(onClick = { onEdit(exercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
+                    IconButton(onClick = { onDelete(exercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onAdd, modifier = Modifier.weight(1f)) { Text("添加动作") }
+                OutlinedButton(onClick = onAddFromHistory, modifier = Modifier.weight(1f)) { Text("从历史动作选择") }
+            }
+            TextButton(onClick = onCopyNext, modifier = Modifier.fillMaxWidth()) {
+                Text("复制到${planWeekdayLabel(if (day.weekday == 7) 1 else day.weekday + 1)}")
+            }
+        }
+    }
+}
+
+private class PlannedExerciseDraft(initial: PlannedExercise? = null) {
+    var name by mutableStateOf(initial?.name ?: "")
+    var data by mutableStateOf(initial?.data?.let { fmtNum(it) } ?: "")
+    var unit by mutableStateOf(initial?.unit ?: "")
+    var count by mutableStateOf(initial?.count?.toString() ?: "")
+    var sets by mutableStateOf(initial?.sets?.toString() ?: "")
+    var note by mutableStateOf(initial?.note ?: "")
+    var muscles by mutableStateOf(initial?.muscles ?: emptyList())
+    val id: String = initial?.id ?: UUID.randomUUID().toString()
+}
+
+@Composable
+private fun PlannedExerciseEditorDialog(
+    initial: PlannedExercise?,
+    onDismiss: () -> Unit,
+    onConfirm: (PlannedExercise) -> Unit,
+) {
+    var showMuscles by remember { mutableStateOf(false) }
+    val draft = remember(initial?.id) { PlannedExerciseDraft(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initial == null) "添加计划动作" else "编辑计划动作") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(draft.name, { draft.name = it }, label = { Text("动作名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(draft.data, { draft.data = it }, label = { Text("数据") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    OutlinedTextField(draft.unit, { draft.unit = it }, label = { Text("单位") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(draft.count, { draft.count = it }, label = { Text("个数(每组)") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(draft.sets, { draft.sets = it }, label = { Text("组数") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                }
+                OutlinedTextField(draft.note, { draft.note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = { showMuscles = true }, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群") }
+                if (draft.muscles.isNotEmpty()) Text("已选择肌肉：${draft.muscles.joinToString("、") { it.name }}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(PlannedExercise(draft.id, draft.name.trim(), draft.data.toDoubleOrNull(), draft.unit.trim(), draft.count.toIntOrNull(), draft.sets.toIntOrNull(), draft.note.trim(), draft.muscles))
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+    if (showMuscles) {
+        MusclePickerDemo(draft.muscles, { draft.muscles = it }, { showMuscles = false })
+    }
+}
+
+@Composable
+private fun HistoryExercisePicker(
+    sessions: List<SessionRecord>,
+    onDismiss: () -> Unit,
+    onPick: (PlannedExercise) -> Unit,
+) {
+    val actions = buildActions(sessions)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("从历史动作选择") },
+        text = {
+            if (actions.isEmpty()) Text("暂无历史动作", color = MaterialTheme.colorScheme.outline)
+            else Column {
+                actions.forEach { action ->
+                    TextButton(
+                        onClick = {
+                            val latest = latestExerciseForName(sessions, action.name)
+                            onPick(PlannedExercise(name = action.name, data = latest?.data, unit = latest?.unit ?: "", count = latest?.count, sets = latest?.sets, muscles = latest?.muscles ?: action.muscles))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(action.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth()) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
 // ---------- Sync page ----------
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -617,7 +1014,7 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
     LaunchedEffect(state.syncUrl) { copied = false }
 
     // import flow state
-    var pendingImport by remember { mutableStateOf<List<SessionRecord>?>(null) }
+    var pendingImport by remember { mutableStateOf<ImportBundle?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var importMode by remember { mutableStateOf<ImportMode>(ImportMode.ALL) }
     var importDate by remember { mutableStateOf(LocalDate.now().toString()) }
@@ -629,8 +1026,8 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
                     input.readBytes().toString(Charsets.UTF_8).removePrefix("\uFEFF")
                 } ?: ""
             } catch (e: Exception) { "" }
-            val parsed = parseImportSessions(json)
-            if (parsed.isNotEmpty()) {
+            val parsed = parseImportData(json)
+            if (parsed.sessions.isNotEmpty() || parsed.trainingPlan != null) {
                 pendingImport = parsed
                 importMode = ImportMode.ALL
                 importDate = LocalDate.now().toString()
@@ -713,16 +1110,21 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
 
     if (showImportDialog) {
         ImportDialog(
-            sessions = pendingImport ?: emptyList(),
+            sessions = pendingImport?.sessions ?: emptyList(),
             mode = importMode,
             onModeChange = { importMode = it },
             date = importDate,
             onDateChange = { importDate = it },
             onDismiss = { showImportDialog = false; pendingImport = null },
             onImport = {
-                val dup = viewModel.importPreview(pendingImport ?: emptyList(), importMode)
+                val dup = viewModel.importPreview(pendingImport?.sessions ?: emptyList(), importMode)
                 if (dup > 0) { showImportDialog = false; showDupDialog = true }
-                else { viewModel.importSessions(pendingImport ?: emptyList(), importMode, false); showImportDialog = false; pendingImport = null }
+                else {
+                    val bundle = pendingImport
+                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, false, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
+                    showImportDialog = false
+                    pendingImport = null
+                }
             },
         )
     }
@@ -733,10 +1135,20 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
             title = { Text("检测到重复") },
             text = { Text("导入内容中有日期已存在数据,如何处理?") },
             confirmButton = {
-                TextButton(onClick = { viewModel.importSessions(pendingImport ?: emptyList(), importMode, true); showDupDialog = false; pendingImport = null }) { Text("合并(覆盖)") }
+                TextButton(onClick = {
+                    val bundle = pendingImport
+                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, true, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
+                    showDupDialog = false
+                    pendingImport = null
+                }) { Text("合并(覆盖)") }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.importSessions(pendingImport ?: emptyList(), importMode, false); showDupDialog = false; pendingImport = null }) { Text("跳过重复") }
+                TextButton(onClick = {
+                    val bundle = pendingImport
+                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, false, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
+                    showDupDialog = false
+                    pendingImport = null
+                }) { Text("跳过重复") }
             },
         )
     }
@@ -790,16 +1202,23 @@ private fun ImportDialog(
     )
 }
 
-/** Parse an exported JSON (WorkoutData or SyncPayload) into sessions. */
-private fun parseImportSessions(json: String): List<SessionRecord> {
-    if (json.isBlank()) return emptyList()
+private data class ImportBundle(
+    val sessions: List<SessionRecord> = emptyList(),
+    val trainingPlan: TrainingPlan? = null,
+)
+
+/** Parse an exported JSON (WorkoutData or SyncPayload) into sessions and an optional plan. */
+private fun parseImportData(json: String): ImportBundle {
+    if (json.isBlank()) return ImportBundle()
     return try {
-        AppJson.json.decodeFromString(WorkoutData.serializer(), json).sessions
+        val data = AppJson.json.decodeFromString(WorkoutData.serializer(), json)
+        ImportBundle(data.sessions, data.trainingPlan)
     } catch (e: Exception) {
         try {
-            AppJson.json.decodeFromString(SyncPayload.serializer(), json).sessions
+            val payload = AppJson.json.decodeFromString(SyncPayload.serializer(), json)
+            ImportBundle(payload.sessions, payload.trainingPlan)
         } catch (e2: Exception) {
-            emptyList()
+            ImportBundle()
         }
     }
 }
@@ -811,7 +1230,17 @@ private fun ActionItemCard(exercise: ExerciseRecord, onEdit: () -> Unit, onDelet
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(exercise.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(exercise.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                    if (exercise.plannedExerciseId != null) {
+                        Text(
+                            "计划",
+                            modifier = Modifier.padding(start = 8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
                 Text(
                     exerciseLine(exercise),
                     style = MaterialTheme.typography.bodySmall,
