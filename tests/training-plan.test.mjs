@@ -48,6 +48,8 @@ test("mode switch calculates the selected background inside the same padded trac
   assert.match(gymAppSource, /Box\(Modifier\.fillMaxWidth\(\)\.padding\(4\.dp\)\)/);
   assert.match(gymAppSource, /val segmentWidth = maxWidth \/ 2/);
   assert.match(gymAppSource, /\.offset\(x = selectedX\)[\s\S]*\.width\(segmentWidth\)/);
+  assert.match(gymAppSource, /\.height\(56\.dp\)/);
+  assert.match(gymAppSource, /\.fillMaxHeight\(\)/);
 });
 
 test("history action selection opens a searchable full-screen history-style page", () => {
@@ -64,6 +66,13 @@ test("plan completion and manual association use the ViewModel persistence path"
   assert.match(viewModelSource, /plannedExerciseId = updated\.plannedExerciseId \?: it\.plannedExerciseId/);
 });
 
+test("completed plan actions can be cancelled and become pending again", () => {
+  assert.match(gymAppSource, /取消完成/);
+  assert.match(gymAppSource, /onCancelComplete/);
+  assert.match(viewModelSource, /fun cancelPlannedExercise\(date: String, plannedExerciseId: String\)/);
+  assert.match(viewModelSource, /filterNot \{ it\.plannedExerciseId == plannedExerciseId \}/);
+});
+
 test("LAN sync includes plan data and keeps date imports session-scoped", () => {
   assert.match(serverSource, /trainingPlan = dataProvider\(\)\.trainingPlan/);
   assert.match(serverSource, /importHandler\(req\.sessions, mode, req\.overwriteDuplicates, req\.trainingPlan\)/);
@@ -71,7 +80,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 37/);
-  assert.match(buildSource, /versionName = "1\.3\.20"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.20\.apk/);
+  assert.match(buildSource, /versionCode = 38/);
+  assert.match(buildSource, /versionName = "1\.3\.21"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.21\.apk/);
 });
