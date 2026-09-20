@@ -560,29 +560,32 @@ private fun WorkoutModeSwitch(selected: WorkoutMode, onSelected: (WorkoutMode) -
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(4.dp),
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        val segmentWidth = maxWidth / 2
-        val selectedX by animateDpAsState(
-            targetValue = if (selected == WorkoutMode.MANUAL) 0.dp else segmentWidth,
-            animationSpec = tween(220),
-            label = "workout-mode-slider",
-        )
-        Box(
-            modifier = Modifier
-                .offset(x = selectedX)
-                .width(segmentWidth)
-                .height(36.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primary),
-        )
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = { onSelected(WorkoutMode.MANUAL) }, modifier = Modifier.weight(1f)) {
-                Text("手动模式", color = if (selected == WorkoutMode.MANUAL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = { onSelected(WorkoutMode.PLAN) }, modifier = Modifier.weight(1f)) {
-                Text("计划模式", color = if (selected == WorkoutMode.PLAN) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.fillMaxWidth().padding(4.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val segmentWidth = maxWidth / 2
+                val selectedX by animateDpAsState(
+                    targetValue = if (selected == WorkoutMode.MANUAL) 0.dp else segmentWidth,
+                    animationSpec = tween(220),
+                    label = "workout-mode-slider",
+                )
+                Box(
+                    modifier = Modifier
+                        .offset(x = selectedX)
+                        .width(segmentWidth)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { onSelected(WorkoutMode.MANUAL) }, modifier = Modifier.weight(1f)) {
+                        Text("手动模式", color = if (selected == WorkoutMode.MANUAL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { onSelected(WorkoutMode.PLAN) }, modifier = Modifier.weight(1f)) {
+                        Text("计划模式", color = if (selected == WorkoutMode.PLAN) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
@@ -863,7 +866,7 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
     }
 
     historyPickerDay?.let { weekday ->
-        HistoryExercisePicker(
+        HistoryActionPickerPage(
             sessions = state.data.sessions,
             onDismiss = { historyPickerDay = null },
             onPick = { exercise ->
@@ -974,32 +977,82 @@ private fun PlannedExerciseEditorDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HistoryExercisePicker(
+private fun HistoryActionPickerPage(
     sessions: List<SessionRecord>,
     onDismiss: () -> Unit,
     onPick: (PlannedExercise) -> Unit,
 ) {
     val actions = buildActions(sessions)
-    AlertDialog(
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery, it.muscles) }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("从历史动作选择") },
-        text = {
-            if (actions.isEmpty()) Text("暂无历史动作", color = MaterialTheme.colorScheme.outline)
-            else Column {
-                actions.forEach { action ->
-                    TextButton(
-                        onClick = {
-                            val latest = latestExerciseForName(sessions, action.name)
-                            onPick(PlannedExercise(name = action.name, data = latest?.data, unit = latest?.unit ?: "", count = latest?.count, sets = latest?.sets, muscles = latest?.muscles ?: action.muscles))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(action.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth()) }
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("选择历史动作", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            if (actions.isEmpty()) {
+                Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无已添加的动作", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+                    item {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("搜索动作或肌群") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                    if (filteredActions.isEmpty()) {
+                        item {
+                            Text(
+                                "没有匹配的动作",
+                                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                color = MaterialTheme.colorScheme.outline,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    } else {
+                        items(filteredActions, key = { it.name }) { action ->
+                            ActionRow(
+                                a = action,
+                                fatigueInfo = null,
+                                onClick = {
+                                    val latest = latestExerciseForName(sessions, action.name)
+                                    onPick(
+                                        PlannedExercise(
+                                            name = action.name,
+                                            data = latest?.data,
+                                            unit = latest?.unit ?: "",
+                                            count = latest?.count,
+                                            sets = latest?.sets,
+                                            muscles = latest?.muscles ?: action.muscles,
+                                        )
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+        }
+    }
 }
 
 // ---------- Sync page ----------

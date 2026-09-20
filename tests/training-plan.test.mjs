@@ -44,6 +44,19 @@ test("manual action cards mark plan-generated records", () => {
   assert.match(gymAppSource, /计划/);
 });
 
+test("mode switch calculates the selected background inside the same padded track", () => {
+  assert.match(gymAppSource, /Box\(Modifier\.fillMaxWidth\(\)\.padding\(4\.dp\)\)/);
+  assert.match(gymAppSource, /val segmentWidth = maxWidth \/ 2/);
+  assert.match(gymAppSource, /\.offset\(x = selectedX\)[\s\S]*\.width\(segmentWidth\)/);
+});
+
+test("history action selection opens a searchable full-screen history-style page", () => {
+  assert.match(gymAppSource, /HistoryActionPickerPage/);
+  assert.match(gymAppSource, /搜索动作或肌群/);
+  assert.match(gymAppSource, /DialogProperties\(usePlatformDefaultWidth = false\)/);
+  assert.match(gymAppSource, /actionMatchesQuery\(it\.name, searchQuery, it\.muscles\)/);
+});
+
 test("plan completion and manual association use the ViewModel persistence path", () => {
   assert.match(viewModelSource, /fun completePlannedExercise\(date: String, plannedExerciseId: String\)/);
   assert.match(viewModelSource, /fun associateExerciseWithPlan\(date: String, exerciseId: String, plannedExerciseId: String\)/);
@@ -57,8 +70,8 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
   assert.match(viewModelSource, /mode is ImportMode\.ALL && trainingPlan != null/);
 });
 
-test("release metadata and README are bumped for the training-plan release", () => {
-  assert.match(buildSource, /versionCode = 36/);
-  assert.match(buildSource, /versionName = "1\.3\.19"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.19\.apk/);
+test("release metadata and README are bumped for the current release", () => {
+  assert.match(buildSource, /versionCode = 37/);
+  assert.match(buildSource, /versionName = "1\.3\.20"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.20\.apk/);
 });
