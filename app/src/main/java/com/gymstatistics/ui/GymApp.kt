@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -287,6 +288,7 @@ fun GymApp(viewModel: GymViewModel) {
                                         onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                         onDelete = { confirmDeleteId = it },
                                         onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
+                                        onCancelComplete = { id -> viewModel.cancelPlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                     )
                                 }
                                 DayModeContent(
@@ -300,6 +302,7 @@ fun GymApp(viewModel: GymViewModel) {
                                         onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                         onDelete = { confirmDeleteId = it },
                                         onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
+                                        onCancelComplete = { id -> viewModel.cancelPlannedExercise(dateKey, id) },
                                 )
                             }
                         }
@@ -448,6 +451,7 @@ private fun DayModeContent(
     onEdit: (ExerciseRecord) -> Unit,
     onDelete: (String) -> Unit,
     onCompletePlan: (String) -> Unit,
+    onCancelComplete: (String) -> Unit,
 ) {
     if (mode == WorkoutMode.MANUAL) {
         WorkoutDayContent(
@@ -464,6 +468,7 @@ private fun DayModeContent(
             plan = plan,
             modifier = modifier,
             onComplete = onCompletePlan,
+            onCancelComplete = onCancelComplete,
         )
     }
 }
@@ -475,6 +480,7 @@ private fun PlannedDayContent(
     plan: TrainingPlan?,
     modifier: Modifier = Modifier,
     onComplete: (String) -> Unit,
+    onCancelComplete: (String) -> Unit,
 ) {
     val day = plan?.days?.firstOrNull { it.weekday == planDayIndex(date) }
     val completed = completedPlanExerciseIds(sessions.firstOrNull { it.date == date.toString() })
@@ -497,6 +503,7 @@ private fun PlannedDayContent(
                     exercise = exercise,
                     completed = exercise.id in completed,
                     onComplete = { onComplete(exercise.id) },
+                    onCancelComplete = { onCancelComplete(exercise.id) },
                 )
             }
         }
@@ -508,6 +515,7 @@ private fun PlannedExerciseCard(
     exercise: PlannedExercise,
     completed: Boolean,
     onComplete: () -> Unit,
+    onCancelComplete: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         if (completed) {
@@ -518,6 +526,7 @@ private fun PlannedExerciseCard(
                 Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text(exercise.name, modifier = Modifier.weight(1f).padding(start = 8.dp), color = MaterialTheme.colorScheme.outline)
                 Text("已完成", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                TextButton(onClick = onCancelComplete) { Text("取消完成") }
             }
         } else {
             Row(
@@ -559,6 +568,7 @@ private fun WorkoutModeSwitch(selected: WorkoutMode, onSelected: (WorkoutMode) -
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
@@ -574,15 +584,15 @@ private fun WorkoutModeSwitch(selected: WorkoutMode, onSelected: (WorkoutMode) -
                     modifier = Modifier
                         .offset(x = selectedX)
                         .width(segmentWidth)
-                        .height(36.dp)
+                        .fillMaxHeight()
                         .clip(RoundedCornerShape(14.dp))
                         .background(MaterialTheme.colorScheme.primary),
                 )
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { onSelected(WorkoutMode.MANUAL) }, modifier = Modifier.weight(1f)) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TextButton(onClick = { onSelected(WorkoutMode.MANUAL) }, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Text("手动模式", color = if (selected == WorkoutMode.MANUAL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = { onSelected(WorkoutMode.PLAN) }, modifier = Modifier.weight(1f)) {
+                    TextButton(onClick = { onSelected(WorkoutMode.PLAN) }, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Text("计划模式", color = if (selected == WorkoutMode.PLAN) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

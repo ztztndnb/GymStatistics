@@ -248,6 +248,20 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         uiState = uiState.copy(message = "已记录计划动作 ${planned.name}")
     }
 
+    fun cancelPlannedExercise(date: String, plannedExerciseId: String) {
+        val current = uiState.data
+        val session = current.sessions.firstOrNull { it.date == date } ?: return
+        val remaining = session.exercises.filterNot { it.plannedExerciseId == plannedExerciseId }
+        if (remaining.size == session.exercises.size) return
+        val sessions = if (remaining.isEmpty()) {
+            current.sessions.filterNot { it.id == session.id }
+        } else {
+            current.sessions.map { if (it.id == session.id) session.copy(exercises = remaining) else it }
+        }
+        persist(current.copy(sessions = sessions))
+        uiState = uiState.copy(message = "已取消计划动作")
+    }
+
     fun associateExerciseWithPlan(date: String, exerciseId: String, plannedExerciseId: String) {
         val current = uiState.data
         val session = current.sessions.firstOrNull { it.date == date } ?: return
