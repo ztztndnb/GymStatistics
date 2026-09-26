@@ -4,15 +4,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -48,6 +51,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -484,6 +489,9 @@ private fun PlannedDayContent(
 ) {
     val day = plan?.days?.firstOrNull { it.weekday == planDayIndex(date) }
     val completed = completedPlanExerciseIds(sessions.firstOrNull { it.date == date.toString() })
+    val pendingExercises = day?.exercises?.filterNot { it.id in completed }.orEmpty()
+    val completedExercises = day?.exercises?.filter { it.id in completed }.orEmpty()
+    var completedExpanded by remember(date) { mutableStateOf(false) }
     if (day == null || (day.exercises.isEmpty() && !day.restDay)) {
         Box(modifier, contentAlignment = Alignment.Center) {
             Text("这一天还没有训练计划", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
@@ -498,13 +506,57 @@ private fun PlannedDayContent(
             fontSize = 13.sp,
         )
         LazyColumn(modifier = Modifier.weight(1f)) {
-            itemsIndexed(day.exercises, key = { index, exercise -> "${exercise.id}#$index" }) { _, exercise ->
+            itemsIndexed(pendingExercises, key = { index, exercise -> "pending-${exercise.id}#$index" }) { _, exercise ->
                 PlannedExerciseCard(
                     exercise = exercise,
-                    completed = exercise.id in completed,
+                    completed = false,
                     onComplete = { onComplete(exercise.id) },
                     onCancelComplete = { onCancelComplete(exercise.id) },
                 )
+            }
+            if (completedExercises.isNotEmpty()) {
+                item(key = "completed-plan-group") {
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { completedExpanded = !completedExpanded }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("已完成动作", fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "${completedExercises.size} 个动作已收起",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                                Icon(
+                                    if (completedExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                    contentDescription = if (completedExpanded) "收起已完成动作" else "展开已完成动作",
+                                )
+                            }
+                            AnimatedVisibility(
+                                visible = completedExpanded,
+                                enter = expandVertically(),
+                                exit = shrinkVertically(),
+                            ) {
+                                Column {
+                                    completedExercises.forEach { exercise ->
+                                        PlannedExerciseCard(
+                                            exercise = exercise,
+                                            completed = true,
+                                            onComplete = { onComplete(exercise.id) },
+                                            onCancelComplete = { onCancelComplete(exercise.id) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -120,8 +120,8 @@ GymStatistics 是一款简洁、离线优先的个人健身记录应用。
 
 ## 当前版本
 
-- 版本：**1.3.21**
-- 正式版 APK：`GymStatistics 1.3.21.apk`
+- 版本：**1.3.22**
+- 正式版 APK：`GymStatistics 1.3.22.apk`
 - 支持系统：Android 8.0（API 26）及以上
 
 ## 安装
