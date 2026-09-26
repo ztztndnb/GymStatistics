@@ -73,6 +73,14 @@ test("completed plan actions can be cancelled and become pending again", () => {
   assert.match(viewModelSource, /filterNot \{ it\.plannedExerciseId == plannedExerciseId \}/);
 });
 
+test("completed plan actions collapse into a separate expandable group below pending actions", () => {
+  assert.match(gymAppSource, /val pendingExercises = day\?\.exercises\?\.filterNot \{ it\.id in completed \}/);
+  assert.match(gymAppSource, /val completedExercises = day\?\.exercises\?\.filter \{ it\.id in completed \}/);
+  assert.match(gymAppSource, /已完成动作/);
+  assert.match(gymAppSource, /AnimatedVisibility\(\s*visible = completedExpanded/);
+  assert.match(gymAppSource, /completedExercises\.forEach/);
+});
+
 test("LAN sync includes plan data and keeps date imports session-scoped", () => {
   assert.match(serverSource, /trainingPlan = dataProvider\(\)\.trainingPlan/);
   assert.match(serverSource, /importHandler\(req\.sessions, mode, req\.overwriteDuplicates, req\.trainingPlan\)/);
@@ -80,7 +88,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 38/);
-  assert.match(buildSource, /versionName = "1\.3\.21"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.21\.apk/);
+  assert.match(buildSource, /versionCode = 39/);
+  assert.match(buildSource, /versionName = "1\.3\.22"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.22\.apk/);
 });
