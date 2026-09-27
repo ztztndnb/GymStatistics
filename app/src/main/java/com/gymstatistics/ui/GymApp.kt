@@ -990,7 +990,7 @@ private fun PlanDayEditor(
 private class PlannedExerciseDraft(initial: PlannedExercise? = null) {
     var name by mutableStateOf(initial?.name ?: "")
     var data by mutableStateOf(initial?.data?.let { fmtNum(it) } ?: "")
-    var unit by mutableStateOf(initial?.unit ?: "")
+    var unit by mutableStateOf(initial?.unit ?: "磅")
     var count by mutableStateOf(initial?.count?.toString() ?: "")
     var sets by mutableStateOf(initial?.sets?.toString() ?: "")
     var note by mutableStateOf(initial?.note ?: "")
@@ -1016,6 +1016,12 @@ private fun PlannedExerciseEditorDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(draft.data, { draft.data = it }, label = { Text("数据") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                     OutlinedTextField(draft.unit, { draft.unit = it }, label = { Text("单位") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    TextButton(onClick = { draft.unit = "" }) { Text("无单位") }
+                    TextButton(onClick = { draft.unit = "磅" }) { Text("磅") }
+                    TextButton(onClick = { draft.unit = "kg" }) { Text("kg") }
+                    TextButton(onClick = { draft.unit = "lbs" }) { Text("lbs") }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1395,7 +1401,7 @@ private fun fmtNum(v: Double): String =
 private class ExerciseDraft(initial: ExerciseRecord? = null) {
     var name by mutableStateOf(initial?.name ?: "")
     var data by mutableStateOf(initial?.data?.let { fmtNum(it) } ?: "")
-    var unit by mutableStateOf(initial?.unit ?: "")
+    var unit by mutableStateOf(initial?.unit ?: "磅")
     var count by mutableStateOf(initial?.count?.toString() ?: "")
     var sets by mutableStateOf(initial?.sets?.toString() ?: "")
     var muscles by mutableStateOf(initial?.muscles ?: emptyList())
@@ -1487,6 +1493,7 @@ private fun ExerciseEditor(draft: ExerciseDraft, onChooseMuscles: () -> Unit) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                 TextButton(onClick = { draft.unit = "" }) { Text("无单位") }
+                TextButton(onClick = { draft.unit = "磅" }) { Text("磅") }
                 TextButton(onClick = { draft.unit = "kg" }) { Text("kg") }
                 TextButton(onClick = { draft.unit = "lbs" }) { Text("lbs") }
             }
