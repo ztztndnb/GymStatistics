@@ -131,6 +131,18 @@ test("selected date background shares the day row vertical alignment", () => {
   assert.doesNotMatch(gymAppSource, /offset\(x = animatedHighlightX, y = 28\.dp\)/);
 });
 
+test("date selectors use Monday as the first day of the week", () => {
+  assert.match(gymAppSource, /private val weekdayLabels = listOf\("一", "二", "三", "四", "五", "六", "日"\)/);
+  assert.match(gymAppSource, /date\.dayOfWeek\.value - 1/);
+  assert.match(gymAppSource, /first\.dayOfWeek\.value - 1/);
+});
+
+test("date selectors use Monday as the first day of the week", () => {
+  assert.match(gymAppSource, /private val weekdayLabels = listOf\("一", "二", "三", "四", "五", "六", "日"\)/);
+  assert.match(gymAppSource, /date\.dayOfWeek\.value - 1/);
+  assert.match(gymAppSource, /first\.dayOfWeek\.value - 1/);
+});
+
 test("history action search supports fuzzy, full-pinyin, and initials matching", () => {
   assert.match(gymAppSource, /var searchQuery by remember \{ mutableStateOf\(""\) \}/);
   assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery, it\.muscles\) \}/);
