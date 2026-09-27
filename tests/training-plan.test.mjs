@@ -81,6 +81,17 @@ test("completed plan actions collapse into a separate expandable group below pen
   assert.match(gymAppSource, /completedExercises\.forEach/);
 });
 
+test("new workout and plan action drafts default to the pound unit", () => {
+  assert.match(gymAppSource, /private class ExerciseDraft[\s\S]*initial\?\.unit \?\: "磅"/);
+  assert.match(gymAppSource, /private class PlannedExerciseDraft[\s\S]*initial\?\.unit \?\: "磅"/);
+});
+
+test("training plan action editor exposes unit choices", () => {
+  assert.match(gymAppSource, /PlannedExerciseEditorDialog[\s\S]*draft\.unit = "磅"/);
+  assert.match(gymAppSource, /PlannedExerciseEditorDialog[\s\S]*draft\.unit = "kg"/);
+  assert.match(gymAppSource, /PlannedExerciseEditorDialog[\s\S]*draft\.unit = "lbs"/);
+});
+
 test("LAN sync includes plan data and keeps date imports session-scoped", () => {
   assert.match(serverSource, /trainingPlan = dataProvider\(\)\.trainingPlan/);
   assert.match(serverSource, /importHandler\(req\.sessions, mode, req\.overwriteDuplicates, req\.trainingPlan\)/);
@@ -88,7 +99,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 39/);
-  assert.match(buildSource, /versionName = "1\.3\.22"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.22\.apk/);
+  assert.match(buildSource, /versionCode = 40/);
+  assert.match(buildSource, /versionName = "1\.3\.23"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.23\.apk/);
 });
