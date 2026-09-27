@@ -658,11 +658,11 @@ private fun planWeekdayLabel(weekday: Int): String =
 
 // ---------- Date selection (week bar + month calendar) ----------
 
-private val weekdayLabels = listOf("日", "一", "二", "三", "四", "五", "六")
+private val weekdayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
-/** Sunday-based start of the week containing [date]. */
+/** Monday-based start of the week containing [date]. */
 private fun weekStart(date: LocalDate): LocalDate =
-    date.minusDays((date.dayOfWeek.value % 7).toLong())
+    date.minusDays((date.dayOfWeek.value - 1).toLong())
 
 private fun dateHeaderLabel(date: LocalDate): String =
     if (date == LocalDate.now()) "今天"
@@ -806,7 +806,7 @@ private fun MonthCalendarDialog(
                 Spacer(Modifier.height(8.dp))
 
                 val first = ym.atDay(1)
-                val leading = first.dayOfWeek.value % 7
+                val leading = first.dayOfWeek.value - 1
                 val total = ym.lengthOfMonth()
                 val cellCount = ((leading + total + 6) / 7) * 7
 
