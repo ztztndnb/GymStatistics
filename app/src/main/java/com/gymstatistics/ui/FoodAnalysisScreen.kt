@@ -78,7 +78,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -164,7 +163,6 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     var reportFromHistory by remember { mutableStateOf(false) }
     var imageSaveFailure by remember { mutableStateOf<FoodAnalysisRecord?>(null) }
     var showKeyDialog by remember { mutableStateOf(false) }
-    var keyInput by remember { mutableStateOf("") }
     var deleteId by remember { mutableStateOf<String?>(null) }
     var captureError by remember { mutableStateOf<String?>(null) }
     var capturedPhoto by remember { mutableStateOf<File?>(null) }
@@ -395,7 +393,6 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         onBack()
                     },
                     onSettings = {
-                        keyInput = ""
                         showKeyDialog = true
                     },
                     onGallery = {
@@ -433,40 +430,11 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
     }
 
     if (showKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showKeyDialog = false },
-            title = { Text("DeepSeek API 设置") },
-            text = {
-                Column {
-                    Text("API Key 仅用于本机调用，并使用系统密钥库加密保存。", fontSize = 12.sp)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = keyInput,
-                        onValueChange = { keyInput = it },
-                        label = { Text("API Key") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setDeepSeekApiKey(keyInput)
-                    showKeyDialog = false
-                }) { Text("保存") }
-            },
-            dismissButton = {
-                Row {
-                    if (state.deepSeekKeyConfigured) {
-                        TextButton(onClick = {
-                            viewModel.clearDeepSeekApiKey()
-                            showKeyDialog = false
-                        }) { Text("删除 Key") }
-                    }
-                    TextButton(onClick = { showKeyDialog = false }) { Text("取消") }
-                }
-            },
+        DeepSeekApiKeyDialog(
+            configured = state.deepSeekKeyConfigured,
+            onSave = viewModel::setDeepSeekApiKey,
+            onDelete = viewModel::clearDeepSeekApiKey,
+            onDismiss = { showKeyDialog = false },
         )
     }
 
