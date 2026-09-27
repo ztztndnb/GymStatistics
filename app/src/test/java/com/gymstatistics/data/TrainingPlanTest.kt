@@ -82,4 +82,34 @@ class TrainingPlanTest {
         assertTrue("p1" in completedPlanExerciseIds(session))
         assertFalse("p1" in completedPlanExerciseIds(session.copy(exercises = emptyList())))
     }
+
+    @Test
+    fun manualModeDisplaysPlanGeneratedActionsAtTheEnd() {
+        val exercises = listOf(
+            ExerciseRecord("计划一", id = "p1", plannedExerciseId = "plan-1"),
+            ExerciseRecord("手动一", id = "m1"),
+            ExerciseRecord("计划二", id = "p2", plannedExerciseId = "plan-2"),
+            ExerciseRecord("手动二", id = "m2"),
+        )
+
+        assertEquals(
+            listOf("手动一", "手动二", "计划一", "计划二"),
+            displayOrderForManualMode(exercises).map { it.name },
+        )
+    }
+
+    @Test
+    fun manualModeReorderingCannotMoveOrReorderPlanGeneratedActions() {
+        val exercises = listOf(
+            ExerciseRecord("手动一", id = "m1"),
+            ExerciseRecord("计划一", id = "p1", plannedExerciseId = "plan-1"),
+            ExerciseRecord("手动二", id = "m2"),
+            ExerciseRecord("计划二", id = "p2", plannedExerciseId = "plan-2"),
+        )
+
+        val reordered = reorderManualExercises(exercises, exerciseId = "m2", direction = -1)
+
+        assertEquals(listOf("手动二", "手动一", "计划一", "计划二"), reordered.map { it.name })
+        assertEquals(listOf("plan-1", "plan-2"), reordered.mapNotNull { it.plannedExerciseId })
+    }
 }

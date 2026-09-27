@@ -35,6 +35,22 @@ fun planDayIndex(date: LocalDate): Int = date.dayOfWeek.value
 fun completedPlanExerciseIds(session: SessionRecord?): Set<String> =
     session?.exercises?.mapNotNull { it.plannedExerciseId }?.toSet().orEmpty()
 
+/** Manual-mode order: ordinary records first, plan-generated records last in their existing order. */
+fun displayOrderForManualMode(exercises: List<ExerciseRecord>): List<ExerciseRecord> =
+    exercises.filter { it.plannedExerciseId == null } + exercises.filter { it.plannedExerciseId != null }
+
+/** Move only an ordinary manual record; plan-generated records remain a stable tail. */
+fun reorderManualExercises(exercises: List<ExerciseRecord>, exerciseId: String, direction: Int): List<ExerciseRecord> {
+    val manual = exercises.filter { it.plannedExerciseId == null }.toMutableList()
+    val planned = exercises.filter { it.plannedExerciseId != null }
+    val index = manual.indexOfFirst { it.id == exerciseId }
+    val target = index + direction
+    if (index < 0 || target !in manual.indices) return manual + planned
+    val moved = manual.removeAt(index)
+    manual.add(target, moved)
+    return manual + planned
+}
+
 fun exerciseRecordForPlan(planned: PlannedExercise, actualId: String): ExerciseRecord =
     ExerciseRecord(
         name = planned.name,
