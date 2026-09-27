@@ -214,8 +214,9 @@ fun GymApp(viewModel: GymViewModel) {
                 BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
                 ModalNavigationDrawer(
                     drawerState = drawerState,
+                    gesturesEnabled = true,
                     drawerContent = {
-                        ModalDrawerSheet {
+                        ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.25f)) {
                             Text("GymStatistics", modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.titleLarge)
                             NavigationDrawerItem(
                                 label = { Text("训练计划") },
