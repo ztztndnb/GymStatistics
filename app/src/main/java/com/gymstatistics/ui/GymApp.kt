@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -18,8 +19,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -130,6 +134,7 @@ import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
 import com.gymstatistics.data.fatigueWarningsFor
 import com.gymstatistics.data.completedPlanExerciseIds
+import com.gymstatistics.data.displayOrderForManualMode
 import com.gymstatistics.data.latestExerciseForName
 import com.gymstatistics.data.planDayIndex
 import android.icu.text.Transliterator
@@ -292,6 +297,7 @@ fun GymApp(viewModel: GymViewModel) {
                                             .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
                                         onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                         onDelete = { confirmDeleteId = it },
+                                        onReorderManual = { id, direction -> viewModel.reorderExercises(selectedDate.plusDays(dragDirection.toLong()).toString(), id, direction) },
                                         onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                         onCancelComplete = { id -> viewModel.cancelPlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                     )
@@ -306,6 +312,7 @@ fun GymApp(viewModel: GymViewModel) {
                                         .graphicsLayer { translationX = contentOffset },
                                         onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                         onDelete = { confirmDeleteId = it },
+                                        onReorderManual = { id, direction -> viewModel.reorderExercises(dateKey, id, direction) },
                                         onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
                                         onCancelComplete = { id -> viewModel.cancelPlannedExercise(dateKey, id) },
                                 )
@@ -415,15 +422,17 @@ fun GymApp(viewModel: GymViewModel) {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun WorkoutDayContent(
     date: LocalDate,
     sessions: List<SessionRecord>,
     modifier: Modifier = Modifier,
     onEdit: (ExerciseRecord) -> Unit,
     onDelete: (String) -> Unit,
+    onReorder: (String, Int) -> Unit,
 ) {
     val session = sessions.firstOrNull { it.date == date.toString() }
-    val dayExercises = session?.exercises ?: emptyList()
+    val dayExercises = displayOrderForManualMode(session?.exercises.orEmpty())
     if (dayExercises.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
             Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
@@ -433,12 +442,26 @@ private fun WorkoutDayContent(
             session?.note?.takeIf { it.isNotBlank() }?.let { note ->
                 Text(note, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
+            val duplicateKeys = dayExercises
+                .groupingBy { it.id.ifEmpty { it.name } }
+                .eachCount()
+                .filterValues { it > 1 }
+                .keys
             LazyColumn(modifier = Modifier.weight(1f)) {
-                itemsIndexed(dayExercises, key = { index, exercise -> "${exercise.id.ifEmpty { exercise.name }}#$index" }) { _, ex ->
+                itemsIndexed(dayExercises, key = { index, exercise ->
+                    val base = exercise.id.ifEmpty { exercise.name }
+                    if (base in duplicateKeys) "$base#$index" else base
+                }) { _, ex ->
                     ActionItemCard(
                         exercise = ex,
+                        modifier = Modifier.animateItem(),
                         onEdit = { onEdit(ex) },
                         onDelete = { onDelete(ex.id) },
+                        onMove = if (ex.plannedExerciseId == null) {
+                            { direction -> onReorder(ex.id, direction) }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -455,6 +478,7 @@ private fun DayModeContent(
     modifier: Modifier = Modifier,
     onEdit: (ExerciseRecord) -> Unit,
     onDelete: (String) -> Unit,
+    onReorderManual: (String, Int) -> Unit,
     onCompletePlan: (String) -> Unit,
     onCancelComplete: (String) -> Unit,
 ) {
@@ -465,6 +489,7 @@ private fun DayModeContent(
             modifier = modifier,
             onEdit = onEdit,
             onDelete = onDelete,
+            onReorder = onReorderManual,
         )
     } else {
         PlannedDayContent(
@@ -961,20 +986,14 @@ private fun PlanDayEditor(
                 Text("当天不安排计划动作", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
             day.exercises.forEachIndexed { index, exercise ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
-                        Text(exercise.name, fontWeight = FontWeight.SemiBold)
-                        Text(exerciseLine(exercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                    }
-                    IconButton(onClick = { onMove(exercise.id, -1) }, enabled = index > 0) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上移")
-                    }
-                    IconButton(onClick = { onMove(exercise.id, 1) }, enabled = index < day.exercises.lastIndex) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下移")
-                    }
-                    IconButton(onClick = { onEdit(exercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
-                    IconButton(onClick = { onDelete(exercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
-                }
+                PlanDayExerciseRow(
+                    exercise = exercise,
+                    index = index,
+                    lastIndex = day.exercises.lastIndex,
+                    onMove = onMove,
+                    onEdit = onEdit,
+                    onDelete = onDelete,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onAdd, modifier = Modifier.weight(1f)) { Text("添加动作") }
@@ -983,6 +1002,72 @@ private fun PlanDayEditor(
             TextButton(onClick = onCopyNext, modifier = Modifier.fillMaxWidth()) {
                 Text("复制到${planWeekdayLabel(if (day.weekday == 7) 1 else day.weekday + 1)}")
             }
+        }
+    }
+}
+
+@Composable
+private fun PlanDayExerciseRow(
+    exercise: PlannedExercise,
+    index: Int,
+    lastIndex: Int,
+    onMove: (String, Int) -> Unit,
+    onEdit: (PlannedExercise) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    var isDragging by remember(exercise.id) { mutableStateOf(false) }
+    var dragOffset by remember(exercise.id) { mutableFloatStateOf(0f) }
+    val scale by animateFloatAsState(
+        targetValue = if (isDragging) 1.04f else 1f,
+        animationSpec = tween(140),
+        label = "plan-drag-scale",
+    )
+    val elevation by animateFloatAsState(
+        targetValue = if (isDragging) 10f else 0f,
+        animationSpec = tween(140),
+        label = "plan-drag-elevation",
+    )
+    val animatedDragOffset by animateFloatAsState(
+        targetValue = if (isDragging) dragOffset else 0f,
+        animationSpec = tween(90),
+        label = "plan-drag-offset",
+    )
+    AnimatedContent(
+        targetState = exercise,
+        transitionSpec = {
+            (slideInVertically { it / 2 } + fadeIn()) togetherWith
+                (slideOutVertically { -it / 2 } + fadeOut())
+        },
+        label = "plan-action-reorder",
+    ) { targetExercise ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = animatedDragOffset
+                    shadowElevation = elevation
+                },
+        ) {
+            DragHandle(
+                onMove = { direction -> onMove(targetExercise.id, direction) },
+                onDragOffsetChanged = { dragOffset = it },
+                onDraggingChanged = { isDragging = it },
+            )
+            Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
+                Text(targetExercise.name, fontWeight = FontWeight.SemiBold)
+                Text(exerciseLine(targetExercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            }
+            IconButton(onClick = { onMove(targetExercise.id, -1) }, enabled = index > 0) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上移")
+            }
+            IconButton(onClick = { onMove(targetExercise.id, 1) }, enabled = index < lastIndex) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下移")
+            }
+            IconButton(onClick = { onEdit(targetExercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
+            IconButton(onClick = { onDelete(targetExercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
         }
     }
 }
@@ -1347,9 +1432,109 @@ private fun parseImportData(json: String): ImportBundle {
 // ---------- Action item card / Add flow ----------
 
 @Composable
-private fun ActionItemCard(exercise: ExerciseRecord, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+private fun Modifier.reorderHandle(
+    onMove: (Int) -> Unit,
+    onDragOffsetChanged: (Float) -> Unit,
+    onDraggingChanged: (Boolean) -> Unit,
+): Modifier {
+    val thresholdPx = with(LocalDensity.current) { 32.dp.toPx() }
+    return pointerInput(onMove) {
+        var accumulated = 0f
+        var dragOffset = 0f
+        detectDragGesturesAfterLongPress(
+            onDragStart = {
+                accumulated = 0f
+                dragOffset = 0f
+                onDragOffsetChanged(0f)
+                onDraggingChanged(true)
+            },
+            onDragEnd = {
+                onDraggingChanged(false)
+                accumulated = 0f
+            },
+            onDragCancel = {
+                onDraggingChanged(false)
+                accumulated = 0f
+            },
+            onDrag = { change, amount ->
+                change.consume()
+                dragOffset += amount.y
+                accumulated += amount.y
+                onDragOffsetChanged(dragOffset)
+                while (accumulated >= thresholdPx) {
+                    onMove(1)
+                    accumulated -= thresholdPx
+                }
+                while (accumulated <= -thresholdPx) {
+                    onMove(-1)
+                    accumulated += thresholdPx
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun DragHandle(
+    onMove: (Int) -> Unit,
+    onDragOffsetChanged: (Float) -> Unit = {},
+    onDraggingChanged: (Boolean) -> Unit = {},
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .reorderHandle(onMove, onDragOffsetChanged, onDraggingChanged)
+            .semantics { contentDescription = "拖动排序" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Filled.DragHandle, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+    }
+}
+
+@Composable
+private fun ActionItemCard(
+    exercise: ExerciseRecord,
+    modifier: Modifier = Modifier,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onMove: ((Int) -> Unit)? = null,
+) {
+    var isDragging by remember(exercise.id) { mutableStateOf(false) }
+    var dragOffset by remember(exercise.id) { mutableFloatStateOf(0f) }
+    val scale by animateFloatAsState(
+        targetValue = if (isDragging) 1.04f else 1f,
+        animationSpec = tween(140),
+        label = "action-drag-scale",
+    )
+    val elevation by animateFloatAsState(
+        targetValue = if (isDragging) 12f else 0f,
+        animationSpec = tween(140),
+        label = "action-drag-elevation",
+    )
+    val animatedDragOffset by animateFloatAsState(
+        targetValue = if (isDragging) dragOffset else 0f,
+        animationSpec = tween(90),
+        label = "action-drag-offset",
+    )
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationY = animatedDragOffset
+                shadowElevation = elevation
+            },
+    ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            onMove?.let {
+                DragHandle(
+                    onMove = it,
+                    onDragOffsetChanged = { dragOffset = it },
+                    onDraggingChanged = { isDragging = it },
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(exercise.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)

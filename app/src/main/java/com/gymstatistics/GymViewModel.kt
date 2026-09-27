@@ -26,6 +26,7 @@ import com.gymstatistics.data.WorkoutRepository
 import com.gymstatistics.data.completedPlanExerciseIds
 import com.gymstatistics.data.exerciseRecordForPlan
 import com.gymstatistics.data.planDayIndex
+import com.gymstatistics.data.reorderManualExercises
 import com.gymstatistics.server.LanSyncServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -151,6 +152,15 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         }
         persist(current.copy(sessions = newSessions))
         uiState = uiState.copy(message = "已保存 ${exercise.name}")
+    }
+
+    fun reorderExercises(date: String, exerciseId: String, direction: Int) {
+        val current = uiState.data
+        val session = current.sessions.firstOrNull { it.date == date } ?: return
+        val reordered = reorderManualExercises(session.exercises, exerciseId, direction)
+        if (reordered == session.exercises) return
+        val sessions = current.sessions.map { if (it.id == session.id) session.copy(exercises = reordered) else it }
+        persist(current.copy(sessions = sessions))
     }
 
     fun saveTrainingPlan(plan: TrainingPlan) {

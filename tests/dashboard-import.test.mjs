@@ -103,7 +103,8 @@ test("workout persistence uses UTF-8 explicitly", () => {
 
 test("main action list cannot crash on duplicate exercise IDs", () => {
   assert.match(gymAppSource, /itemsIndexed\(dayExercises, key = \{ index, exercise ->/);
-  assert.match(gymAppSource, /exercise\.id\.ifEmpty \{ exercise\.name \}.*index/);
+  assert.match(gymAppSource, /val base = exercise\.id\.ifEmpty \{ exercise\.name \}/);
+  assert.match(gymAppSource, /if \(base in duplicateKeys\) "\$base#\$index"/);
 });
 
 test("import regenerates blank and colliding exercise IDs", () => {

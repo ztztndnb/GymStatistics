@@ -44,6 +44,28 @@ test("manual action cards mark plan-generated records", () => {
   assert.match(gymAppSource, /计划/);
 });
 
+test("manual mode keeps plan-generated actions at the end during reordering", () => {
+  assert.match(planSource, /fun displayOrderForManualMode\(exercises: List<ExerciseRecord>\)/);
+  assert.match(planSource, /fun reorderManualExercises\(exercises: List<ExerciseRecord>, exerciseId: String, direction: Int\)/);
+  assert.match(viewModelSource, /fun reorderExercises\(date: String, exerciseId: String, direction: Int\)/);
+  assert.match(viewModelSource, /reorderManualExercises\(session\.exercises, exerciseId, direction\)/);
+  assert.match(gymAppSource, /displayOrderForManualMode\(session\?\.exercises\.orEmpty\(\)\)/);
+});
+
+test("training plan and manual action rows expose long-press drag handles", () => {
+  assert.match(gymAppSource, /detectDragGesturesAfterLongPress/);
+  assert.match(gymAppSource, /拖动排序/);
+  assert.match(gymAppSource, /reorderHandle\(/);
+});
+
+test("drag sorting animates the active card and reordered rows", () => {
+  assert.match(gymAppSource, /onDragOffsetChanged/);
+  assert.match(gymAppSource, /graphicsLayer\s*\{[\s\S]*translationY/);
+  assert.match(gymAppSource, /animateFloatAsState/);
+  assert.match(gymAppSource, /\.animateItem\(\)/);
+  assert.match(gymAppSource, /AnimatedContent\(\s*targetState = exercise/);
+});
+
 test("mode switch calculates the selected background inside the same padded track", () => {
   assert.match(gymAppSource, /Box\(Modifier\.fillMaxWidth\(\)\.padding\(4\.dp\)\)/);
   assert.match(gymAppSource, /val segmentWidth = maxWidth \/ 2/);
@@ -99,7 +121,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 41/);
-  assert.match(buildSource, /versionName = "1\.3\.24"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.24\.apk/);
+  assert.match(buildSource, /versionCode = 43/);
+  assert.match(buildSource, /versionName = "1\.3\.26"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.26\.apk/);
 });
