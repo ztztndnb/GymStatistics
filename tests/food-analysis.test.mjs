@@ -318,11 +318,16 @@ test("camera uses a FileProvider and no barcode scanner dependency is introduced
   assert.doesNotMatch(analyzerSource, /barcode|QR/i);
 });
 
-test("release metadata is 1.3.26 with the requested APK name", () => {
+test("settings shows API key save and error messages", () => {
+  const settingsPage = uiSource.split("private fun SettingsPage(")[1].split("private fun SyncPage(")[0];
+  assert.match(settingsPage, /snackbarHost = \{ SnackbarHost\(snackbarHostState\) \}/);
+});
+
+test("release metadata is 1.3.29 with the requested APK name", () => {
   const buildSource = source("app/build.gradle.kts");
-  assert.match(buildSource, /versionCode = 43/);
-  assert.match(buildSource, /versionName = "1\.3\.26"/);
+  assert.match(buildSource, /versionCode = 46/);
+  assert.match(buildSource, /versionName = "1\.3\.29"/);
   assert.match(buildSource, /register\("copyReleaseApkWithVersion"\)/);
   assert.match(buildSource, /source\.copyTo\(target, overwrite = true\)/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.26\.apk/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.29\.apk/);
 });

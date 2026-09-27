@@ -58,12 +58,37 @@ test("training plan and manual action rows expose long-press drag handles", () =
   assert.match(gymAppSource, /reorderHandle\(/);
 });
 
-test("drag sorting animates the active card and reordered rows", () => {
+test("drag sorting follows the pointer while reordered rows animate", () => {
   assert.match(gymAppSource, /onDragOffsetChanged/);
-  assert.match(gymAppSource, /graphicsLayer\s*\{[\s\S]*translationY/);
+  assert.match(gymAppSource, /translationY = if \(isDragging\) dragOffset else (?:0f|placementOffset\.value)/);
+  assert.match(gymAppSource, /dragOffset -= movedDistance/);
+  assert.match(gymAppSource, /dragOffset \+= movedDistance/);
+  assert.doesNotMatch(gymAppSource, /animatedDragOffset/);
+  assert.match(gymAppSource, /rememberUpdatedState\(onMove\)/);
+  assert.match(gymAppSource, /pointerInput\(Unit\)/);
+  assert.match(gymAppSource, /key\(exercise\.id\)\s*\{\s*PlanDayExerciseRow\(/);
+  assert.doesNotMatch(gymAppSource, /targetState = exercise,/);
+  assert.match(gymAppSource, /activeDraggedId/);
   assert.match(gymAppSource, /animateFloatAsState/);
   assert.match(gymAppSource, /\.animateItem\(\)/);
-  assert.match(gymAppSource, /AnimatedContent\(\s*targetState = exercise/);
+  assert.match(gymAppSource, /placementOffset\.animateTo\(0f/);
+});
+
+test("dragged plan and manual actions use opaque rounded card backgrounds", () => {
+  const planRow = gymAppSource.split("private fun PlanDayExerciseRow(")[1].split("private class PlannedExerciseDraft")[0];
+  const manualCard = gymAppSource.split("private fun ActionItemCard(")[1].split("private fun exerciseLine(")[0];
+  assert.match(planRow, /val dragBackground = if \(isDragging\) MaterialTheme\.colorScheme\.surfaceContainerHigh\.copy\(alpha = 1f\) else Color\.Transparent/);
+  assert.match(planRow, /shape = RoundedCornerShape\(16\.dp\)/);
+  assert.match(planRow, /\.background\(dragBackground\)/);
+  assert.match(manualCard, /CardDefaults\.cardColors\(containerColor = MaterialTheme\.colorScheme\.surfaceContainerHigh\.copy\(alpha = 1f\)\)/);
+});
+
+test("plan action row keeps drag, edit and delete but no move arrows", () => {
+  const planRow = gymAppSource.split("private fun PlanDayExerciseRow(")[1].split("private class PlannedExerciseDraft")[0];
+  assert.match(planRow, /DragHandle\(/);
+  assert.match(planRow, /contentDescription = "编辑计划动作"/);
+  assert.match(planRow, /contentDescription = "删除计划动作"/);
+  assert.doesNotMatch(planRow, /contentDescription = "(?:上移|下移)"/);
 });
 
 test("mode switch calculates the selected background inside the same padded track", () => {
@@ -121,7 +146,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 43/);
-  assert.match(buildSource, /versionName = "1\.3\.26"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.26\.apk/);
+  assert.match(buildSource, /versionCode = 46/);
+  assert.match(buildSource, /versionName = "1\.3\.29"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.29\.apk/);
 });

@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +50,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -57,15 +59,21 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -75,17 +83,21 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -110,6 +122,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
@@ -150,7 +163,7 @@ import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private enum class Screen { MAIN, PLAN, HISTORY, SYNC, FOOD }
+private enum class Screen { MAIN, PLAN, HISTORY, SETTINGS, SYNC, FOOD }
 
 private enum class WorkoutMode { MANUAL, PLAN }
 
@@ -164,7 +177,9 @@ fun GymApp(viewModel: GymViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var screen by remember { mutableStateOf(Screen.MAIN) }
     var historySelected by remember { mutableStateOf<String?>(null) }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var weekNavigation by remember { mutableStateOf(WeekNavigation(LocalDate.now())) }
+    val selectedDate = weekNavigation.selectedDate
+    val currentSelectedDate by rememberUpdatedState(selectedDate)
     var workoutMode by remember { mutableStateOf(WorkoutMode.MANUAL) }
     var showCalendar by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
@@ -195,14 +210,54 @@ fun GymApp(viewModel: GymViewModel) {
             Screen.MAIN -> {
                 val dateKey = selectedDate.toString()
                 val sessionForDay = state.data.sessions.firstOrNull { it.date == dateKey }
+                val drawerState = rememberDrawerState(DrawerValue.Closed)
+                BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet {
+                            Text("GymStatistics", modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.titleLarge)
+                            NavigationDrawerItem(
+                                label = { Text("训练计划") },
+                                selected = false,
+                                onClick = {
+                                    scope.launch {
+                                        drawerState.close()
+                                        screen = Screen.PLAN
+                                    }
+                                },
+                                icon = { Icon(Icons.AutoMirrored.Filled.EventNote, contentDescription = null) },
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                            NavigationDrawerItem(
+                                label = { Text("设置") },
+                                selected = false,
+                                onClick = {
+                                    scope.launch {
+                                        drawerState.close()
+                                        screen = Screen.SETTINGS
+                                    }
+                                },
+                                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                        }
+                    },
+                ) {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("GymStatistics", fontWeight = FontWeight.Bold) },
+                            title = {
+                                Text(
+                                    "GymStatistics",
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { scope.launch { drawerState.open() } }
+                                        .semantics { contentDescription = "打开侧边栏" },
+                                )
+                            },
                             actions = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") }
-                                    TextButton(onClick = { screen = Screen.PLAN }) { Text("训练计划") }
                                     IconButton(
                                         onClick = { screen = Screen.FOOD },
                                         modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
@@ -224,8 +279,20 @@ fun GymApp(viewModel: GymViewModel) {
                             .padding(padding)
                             .fillMaxSize()
                     ) {
-                        DatePickerHeader(selectedDate = selectedDate, onOpenCalendar = { showCalendar = true })
-                        WeekDayBar(selectedDate = selectedDate, onSelect = { selectedDate = it })
+                        DatePickerHeader(
+                            selectedDate = selectedDate,
+                            visibleWeekStart = weekNavigation.visibleWeekStart,
+                            onOpenCalendar = { showCalendar = true },
+                        )
+                        WeekDayBar(
+                            selectedDate = selectedDate,
+                            visibleWeekStart = weekNavigation.visibleWeekStart,
+                            revision = weekNavigation.revision,
+                            onSelect = { weekNavigation = weekNavigation.select(it) },
+                            onPage = { revision, direction ->
+                                weekNavigation = weekNavigation.pageIfRevision(revision, direction)
+                            },
+                        )
                         WorkoutModeSwitch(selected = workoutMode, onSelected = { workoutMode = it })
                         BoxWithConstraints(
                             modifier = Modifier
@@ -254,7 +321,7 @@ fun GymApp(viewModel: GymViewModel) {
                                                 isSettling = true
                                                 settleOffset.snapTo(dragOffset)
                                                 settleOffset.animateTo(target, tween(220))
-                                                if (commit) selectedDate = selectedDate.plusDays(direction.toLong())
+                                                if (commit) weekNavigation = weekNavigation.select(currentSelectedDate.plusDays(direction.toLong()))
                                                 dragOffset = 0f
                                                 dragDirection = 0
                                                 settleOffset.snapTo(0f)
@@ -327,19 +394,16 @@ fun GymApp(viewModel: GymViewModel) {
                                 Spacer(Modifier.width(6.dp))
                                 Text("记录动作")
                             }
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = { screen = Screen.SYNC }, modifier = Modifier.fillMaxWidth()) {
-                                Text("局域网同步")
-                            }
                         }
                     }
+                }
                 }
 
                 if (showCalendar) {
                     MonthCalendarDialog(
                         initial = selectedDate,
                         onDismiss = { showCalendar = false },
-                        onSelect = { selectedDate = it; showCalendar = false },
+                        onSelect = { weekNavigation = weekNavigation.select(it); showCalendar = false },
                     )
                 }
                 if (showAdd) {
@@ -391,7 +455,14 @@ fun GymApp(viewModel: GymViewModel) {
 
             Screen.PLAN -> TrainingPlanPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
 
-            Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
+            Screen.SETTINGS -> SettingsPage(
+                viewModel = viewModel,
+                snackbarHostState = snackbarHostState,
+                onBack = { screen = Screen.MAIN },
+                onSync = { screen = Screen.SYNC },
+            )
+
+            Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.SETTINGS })
 
             Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { screen = Screen.MAIN })
         }
@@ -433,6 +504,9 @@ private fun WorkoutDayContent(
 ) {
     val session = sessions.firstOrNull { it.date == date.toString() }
     val dayExercises = displayOrderForManualMode(session?.exercises.orEmpty())
+    val listState = rememberLazyListState()
+    var activeDraggedId by remember(date) { mutableStateOf<String?>(null) }
+    val fallbackRowHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
     if (dayExercises.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
             Text("这一天没有训练记录", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
@@ -447,20 +521,36 @@ private fun WorkoutDayContent(
                 .eachCount()
                 .filterValues { it > 1 }
                 .keys
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                 itemsIndexed(dayExercises, key = { index, exercise ->
                     val base = exercise.id.ifEmpty { exercise.name }
                     if (base in duplicateKeys) "$base#$index" else base
                 }) { _, ex ->
                     ActionItemCard(
                         exercise = ex,
-                        modifier = Modifier.animateItem(),
+                        modifier = if (ex.id == activeDraggedId) Modifier else Modifier.animateItem(),
                         onEdit = { onEdit(ex) },
                         onDelete = { onDelete(ex.id) },
                         onMove = if (ex.plannedExerciseId == null) {
-                            { direction -> onReorder(ex.id, direction) }
+                            { direction ->
+                                val currentIndex = dayExercises.indexOfFirst { it.id == ex.id }
+                                val targetIndex = currentIndex + direction
+                                val manualCount = dayExercises.count { it.plannedExerciseId == null }
+                                if (currentIndex < 0 || targetIndex !in 0 until manualCount) {
+                                    0f
+                                } else {
+                                    val movedDistance = listState.layoutInfo.visibleItemsInfo
+                                        .firstOrNull { it.index == targetIndex }?.size?.toFloat()
+                                        ?: fallbackRowHeightPx
+                                    onReorder(ex.id, direction)
+                                    movedDistance
+                                }
+                            }
                         } else {
                             null
+                        },
+                        onDraggingChanged = { dragging ->
+                            activeDraggedId = if (dragging) ex.id else null
                         },
                     )
                 }
@@ -685,16 +775,12 @@ private fun planWeekdayLabel(weekday: Int): String =
 
 private val weekdayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
-/** Monday-based start of the week containing [date]. */
-private fun weekStart(date: LocalDate): LocalDate =
-    date.minusDays((date.dayOfWeek.value - 1).toLong())
-
 private fun dateHeaderLabel(date: LocalDate): String =
     if (date == LocalDate.now()) "今天"
     else "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
 
 @Composable
-private fun DatePickerHeader(selectedDate: LocalDate, onOpenCalendar: () -> Unit) {
+private fun DatePickerHeader(selectedDate: LocalDate, visibleWeekStart: LocalDate, onOpenCalendar: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -712,7 +798,7 @@ private fun DatePickerHeader(selectedDate: LocalDate, onOpenCalendar: () -> Unit
         Text("▾", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
     }
     Text(
-        weekRangeLabel(selectedDate),
+        weekRangeLabel(visibleWeekStart),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         color = MaterialTheme.colorScheme.outline,
         fontSize = 12.sp,
@@ -726,19 +812,121 @@ private fun weekRangeLabel(date: LocalDate): String {
 }
 
 @Composable
-private fun WeekDayBar(selectedDate: LocalDate, onSelect: (LocalDate) -> Unit) {
-    val start = weekStart(selectedDate)
+private fun WeekDayBar(
+    selectedDate: LocalDate,
+    visibleWeekStart: LocalDate,
+    revision: Long,
+    onSelect: (LocalDate) -> Unit,
+    onPage: (Long, Int) -> Unit,
+) {
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragDirection by remember { mutableStateOf(0) }
+    var isSettling by remember { mutableStateOf(false) }
+    val settleOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val currentOnPage by rememberUpdatedState(onPage)
+    val currentRevision by rememberUpdatedState(revision)
+    val selectDate: (LocalDate) -> Unit = { date ->
+        if (isSettling) {
+            isSettling = false
+            dragOffset = 0f
+            dragDirection = 0
+        }
+        onSelect(date)
+    }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clipToBounds()) {
+        val pageWidth = with(LocalDensity.current) { maxWidth.toPx() }
+        val offset = if (isSettling) settleOffset.value else dragOffset
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(pageWidth) {
+                    val velocityTracker = VelocityTracker()
+                    var dragStartedRevision = currentRevision
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            dragOffset = 0f
+                            dragDirection = 0
+                            dragStartedRevision = currentRevision
+                            velocityTracker.resetTracking()
+                        },
+                        onDragEnd = {
+                            val direction = dragDirection
+                            val expectedRevision = dragStartedRevision
+                            val forwardDistance = -dragOffset * direction
+                            val forwardVelocity = -velocityTracker.calculateVelocity().x * direction
+                            val commit = direction != 0 &&
+                                forwardVelocity > -MIN_FLING_VELOCITY &&
+                                (forwardDistance >= pageWidth * 0.25f || forwardVelocity >= MIN_FLING_VELOCITY)
+                            val target = if (commit) -direction * pageWidth else 0f
+                            velocityTracker.resetTracking()
+                            scope.launch {
+                                isSettling = true
+                                settleOffset.snapTo(dragOffset)
+                                settleOffset.animateTo(target, tween(220))
+                                if (commit) currentOnPage(expectedRevision, direction)
+                                dragOffset = 0f
+                                dragDirection = 0
+                                settleOffset.snapTo(0f)
+                                isSettling = false
+                            }
+                        },
+                        onDragCancel = {
+                            velocityTracker.resetTracking()
+                            scope.launch {
+                                isSettling = true
+                                settleOffset.snapTo(dragOffset)
+                                settleOffset.animateTo(0f, tween(220))
+                                dragOffset = 0f
+                                dragDirection = 0
+                                settleOffset.snapTo(0f)
+                                isSettling = false
+                            }
+                        },
+                    ) { change, amount ->
+                        change.consume()
+                        velocityTracker.addPosition(change.uptimeMillis, change.position)
+                        dragOffset = (dragOffset + amount).coerceIn(-pageWidth, pageWidth)
+                        if (dragOffset != 0f) dragDirection = if (dragOffset < 0f) 1 else -1
+                    }
+                },
+        ) {
+            if (dragDirection != 0) {
+                WeekDateCells(
+                    start = visibleWeekStart.plusWeeks(dragDirection.toLong()),
+                    selectedDate = selectedDate,
+                    onSelect = selectDate,
+                    modifier = Modifier.fillMaxWidth().graphicsLayer { translationX = offset + pageWidth * dragDirection },
+                )
+            }
+            WeekDateCells(
+                start = visibleWeekStart,
+                selectedDate = selectedDate,
+                onSelect = selectDate,
+                modifier = Modifier.fillMaxWidth().graphicsLayer { translationX = offset },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeekDateCells(
+    start: LocalDate,
+    selectedDate: LocalDate,
+    onSelect: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val today = LocalDate.now()
-    val selectedIndex = ChronoUnit.DAYS.between(start, selectedDate).toInt().coerceIn(0, 6)
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    val selectedIndex = ChronoUnit.DAYS.between(start, selectedDate).toInt()
+    BoxWithConstraints(modifier = modifier) {
         val cellWidth = maxWidth / 7
-        val highlightX = (cellWidth - 34.dp) / 2 + cellWidth * selectedIndex
-        val animatedHighlightX by animateDpAsState(
-            targetValue = highlightX,
-            animationSpec = tween(durationMillis = 260),
-            label = "selected date highlight",
-        )
-        Box(modifier = Modifier.matchParentSize()) {
+        if (selectedIndex in 0..6) {
+            val highlightX = (cellWidth - 34.dp) / 2 + cellWidth * selectedIndex
+            val animatedHighlightX by animateDpAsState(
+                targetValue = highlightX,
+                animationSpec = tween(durationMillis = 260),
+                label = "selected date highlight",
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -986,14 +1174,16 @@ private fun PlanDayEditor(
                 Text("当天不安排计划动作", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
             day.exercises.forEachIndexed { index, exercise ->
-                PlanDayExerciseRow(
-                    exercise = exercise,
-                    index = index,
-                    lastIndex = day.exercises.lastIndex,
-                    onMove = onMove,
-                    onEdit = onEdit,
-                    onDelete = onDelete,
-                )
+                key(exercise.id) {
+                    PlanDayExerciseRow(
+                        exercise = exercise,
+                        index = index,
+                        lastIndex = day.exercises.lastIndex,
+                        onMove = onMove,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onAdd, modifier = Modifier.weight(1f)) { Text("添加动作") }
@@ -1027,48 +1217,52 @@ private fun PlanDayExerciseRow(
         animationSpec = tween(140),
         label = "plan-drag-elevation",
     )
-    val animatedDragOffset by animateFloatAsState(
-        targetValue = if (isDragging) dragOffset else 0f,
-        animationSpec = tween(90),
-        label = "plan-drag-offset",
-    )
-    AnimatedContent(
-        targetState = exercise,
-        transitionSpec = {
-            (slideInVertically { it / 2 } + fadeIn()) togetherWith
-                (slideOutVertically { -it / 2 } + fadeOut())
-        },
-        label = "plan-action-reorder",
-    ) { targetExercise ->
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = animatedDragOffset
-                    shadowElevation = elevation
-                },
-        ) {
-            DragHandle(
-                onMove = { direction -> onMove(targetExercise.id, direction) },
-                onDragOffsetChanged = { dragOffset = it },
-                onDraggingChanged = { isDragging = it },
-            )
-            Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
-                Text(targetExercise.name, fontWeight = FontWeight.SemiBold)
-                Text(exerciseLine(targetExercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-            }
-            IconButton(onClick = { onMove(targetExercise.id, -1) }, enabled = index > 0) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上移")
-            }
-            IconButton(onClick = { onMove(targetExercise.id, 1) }, enabled = index < lastIndex) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下移")
-            }
-            IconButton(onClick = { onEdit(targetExercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
-            IconButton(onClick = { onDelete(targetExercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
+    val dragBackground = if (isDragging) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 1f) else Color.Transparent
+    val rowHeightPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val placementOffset = remember(exercise.id) { Animatable(0f) }
+    var previousIndex by remember(exercise.id) { mutableStateOf(index) }
+    LaunchedEffect(index) {
+        val previousPosition = previousIndex
+        previousIndex = index
+        if (previousPosition != index && !isDragging) {
+            placementOffset.snapTo((previousPosition - index) * rowHeightPx)
+            placementOffset.animateTo(0f, animationSpec = tween(180))
         }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(if (isDragging) 1f else 0f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationY = if (isDragging) dragOffset else placementOffset.value
+                shadowElevation = elevation
+                shape = RoundedCornerShape(16.dp)
+                clip = isDragging
+            }
+            .background(dragBackground),
+    ) {
+        DragHandle(
+            onMove = { direction ->
+                val targetIndex = index + direction
+                if (targetIndex !in 0..lastIndex) {
+                    0f
+                } else {
+                    onMove(exercise.id, direction)
+                    rowHeightPx
+                }
+            },
+            onDragOffsetChanged = { dragOffset = it },
+            onDraggingChanged = { isDragging = it },
+        )
+        Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
+            Text(exercise.name, fontWeight = FontWeight.SemiBold)
+            Text(exerciseLine(exercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+        }
+        IconButton(onClick = { onEdit(exercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
+        IconButton(onClick = { onDelete(exercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
     }
 }
 
@@ -1208,7 +1402,65 @@ private fun HistoryActionPickerPage(
     }
 }
 
-// ---------- Sync page ----------
+// ---------- Settings and sync ----------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsPage(
+    viewModel: GymViewModel,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onSync: () -> Unit,
+) {
+    val keyConfigured = viewModel.uiState.deepSeekKeyConfigured
+    var showKeyDialog by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("设置", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                },
+            )
+        },
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+            Text("AI 食物分析", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("DeepSeek API Key", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (keyConfigured) "已配置；可在这里或相机内修改" else "尚未配置",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = { showKeyDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (keyConfigured) "修改 API Key" else "配置 API Key")
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text("数据与同步", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onSync, modifier = Modifier.fillMaxWidth()) { Text("局域网同步") }
+        }
+    }
+
+    if (showKeyDialog) {
+        DeepSeekApiKeyDialog(
+            configured = keyConfigured,
+            onSave = viewModel::setDeepSeekApiKey,
+            onDelete = viewModel::clearDeepSeekApiKey,
+            onDismiss = { showKeyDialog = false },
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1433,40 +1685,46 @@ private fun parseImportData(json: String): ImportBundle {
 
 @Composable
 private fun Modifier.reorderHandle(
-    onMove: (Int) -> Unit,
+    onMove: (Int) -> Float,
     onDragOffsetChanged: (Float) -> Unit,
     onDraggingChanged: (Boolean) -> Unit,
 ): Modifier {
     val thresholdPx = with(LocalDensity.current) { 32.dp.toPx() }
-    return pointerInput(onMove) {
+    val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnDragOffsetChanged by rememberUpdatedState(onDragOffsetChanged)
+    val currentOnDraggingChanged by rememberUpdatedState(onDraggingChanged)
+    return pointerInput(Unit) {
         var accumulated = 0f
         var dragOffset = 0f
         detectDragGesturesAfterLongPress(
             onDragStart = {
                 accumulated = 0f
                 dragOffset = 0f
-                onDragOffsetChanged(0f)
-                onDraggingChanged(true)
+                currentOnDragOffsetChanged(0f)
+                currentOnDraggingChanged(true)
             },
             onDragEnd = {
-                onDraggingChanged(false)
+                currentOnDraggingChanged(false)
                 accumulated = 0f
             },
             onDragCancel = {
-                onDraggingChanged(false)
+                currentOnDraggingChanged(false)
                 accumulated = 0f
             },
             onDrag = { change, amount ->
                 change.consume()
                 dragOffset += amount.y
                 accumulated += amount.y
-                onDragOffsetChanged(dragOffset)
-                while (accumulated >= thresholdPx) {
-                    onMove(1)
+                currentOnDragOffsetChanged(dragOffset)
+                if (accumulated >= thresholdPx) {
+                    val movedDistance = currentOnMove(1)
+                    dragOffset -= movedDistance
+                    currentOnDragOffsetChanged(dragOffset)
                     accumulated -= thresholdPx
-                }
-                while (accumulated <= -thresholdPx) {
-                    onMove(-1)
+                } else if (accumulated <= -thresholdPx) {
+                    val movedDistance = currentOnMove(-1)
+                    dragOffset += movedDistance
+                    currentOnDragOffsetChanged(dragOffset)
                     accumulated += thresholdPx
                 }
             },
@@ -1476,7 +1734,7 @@ private fun Modifier.reorderHandle(
 
 @Composable
 private fun DragHandle(
-    onMove: (Int) -> Unit,
+    onMove: (Int) -> Float,
     onDragOffsetChanged: (Float) -> Unit = {},
     onDraggingChanged: (Boolean) -> Unit = {},
 ) {
@@ -1497,7 +1755,8 @@ private fun ActionItemCard(
     modifier: Modifier = Modifier,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onMove: ((Int) -> Unit)? = null,
+    onMove: ((Int) -> Float)? = null,
+    onDraggingChanged: (Boolean) -> Unit = {},
 ) {
     var isDragging by remember(exercise.id) { mutableStateOf(false) }
     var dragOffset by remember(exercise.id) { mutableFloatStateOf(0f) }
@@ -1511,28 +1770,33 @@ private fun ActionItemCard(
         animationSpec = tween(140),
         label = "action-drag-elevation",
     )
-    val animatedDragOffset by animateFloatAsState(
-        targetValue = if (isDragging) dragOffset else 0f,
-        animationSpec = tween(90),
-        label = "action-drag-offset",
-    )
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .zIndex(if (isDragging) 1f else 0f)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                translationY = animatedDragOffset
+                translationY = if (isDragging) dragOffset else 0f
                 shadowElevation = elevation
             },
+        shape = RoundedCornerShape(if (isDragging) 16.dp else 12.dp),
+        colors = if (isDragging) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 1f))
+        } else {
+            CardDefaults.cardColors()
+        },
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             onMove?.let {
                 DragHandle(
                     onMove = it,
                     onDragOffsetChanged = { dragOffset = it },
-                    onDraggingChanged = { isDragging = it },
+                    onDraggingChanged = {
+                        isDragging = it
+                        onDraggingChanged(it)
+                    },
                 )
             }
             Column(modifier = Modifier.weight(1f)) {

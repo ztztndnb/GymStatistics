@@ -6,6 +6,7 @@ import vm from "node:vm";
 const dashboardHtml = fs.readFileSync(new URL("../app/src/main/assets/dashboard.html", import.meta.url), "utf8");
 const dashboardScript = dashboardHtml.match(/<script>([\s\S]*)<\/script>/)[1];
 const gymAppSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/ui/GymApp.kt", import.meta.url), "utf8");
+const weekNavigationSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/ui/WeekNavigation.kt", import.meta.url), "utf8");
 const modelsSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/Models.kt", import.meta.url), "utf8");
 const repositorySource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/data/WorkoutRepository.kt", import.meta.url), "utf8");
 const viewModelSource = fs.readFileSync(new URL("../app/src/main/java/com/gymstatistics/GymViewModel.kt", import.meta.url), "utf8");
@@ -120,7 +121,7 @@ test("exercise notes are stored on and loaded from the individual exercise", () 
 });
 
 test("date changes keep the header fixed while the day content follows the swipe", () => {
-  assert.match(gymAppSource, /DatePickerHeader\(selectedDate = selectedDate/);
+  assert.match(gymAppSource, /DatePickerHeader\(\s*selectedDate = selectedDate/);
   assert.match(gymAppSource, /BoxWithConstraints\(\s*modifier = Modifier\s*\.weight\(1f\)\s*\.pointerInput/);
   assert.match(gymAppSource, /animateDpAsState\(/);
   assert.match(gymAppSource, /animatedHighlightX/);
@@ -128,19 +129,18 @@ test("date changes keep the header fixed while the day content follows the swipe
 });
 
 test("selected date background shares the day row vertical alignment", () => {
-  assert.match(gymAppSource, /matchParentSize\(\)/);
+  assert.match(gymAppSource, /if \(selectedIndex in 0\.\.6\) \{[\s\S]*?\.align\(Alignment\.BottomStart\)/);
   assert.doesNotMatch(gymAppSource, /offset\(x = animatedHighlightX, y = 28\.dp\)/);
 });
 
-test("date selectors use Monday as the first day of the week", () => {
-  assert.match(gymAppSource, /private val weekdayLabels = listOf\("一", "二", "三", "四", "五", "六", "日"\)/);
-  assert.match(gymAppSource, /date\.dayOfWeek\.value - 1/);
-  assert.match(gymAppSource, /first\.dayOfWeek\.value - 1/);
+test("day-content swipe reads the latest selected date after week or calendar taps", () => {
+  assert.match(gymAppSource, /val currentSelectedDate by rememberUpdatedState\(selectedDate\)/);
+  assert.match(gymAppSource, /if \(commit\) weekNavigation = weekNavigation\.select\(currentSelectedDate\.plusDays\(direction\.toLong\(\)\)\)/);
 });
 
 test("date selectors use Monday as the first day of the week", () => {
   assert.match(gymAppSource, /private val weekdayLabels = listOf\("一", "二", "三", "四", "五", "六", "日"\)/);
-  assert.match(gymAppSource, /date\.dayOfWeek\.value - 1/);
+  assert.match(weekNavigationSource, /date\.dayOfWeek\.value - 1/);
   assert.match(gymAppSource, /first\.dayOfWeek\.value - 1/);
 });
 
