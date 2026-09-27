@@ -106,6 +106,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +116,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
@@ -211,12 +213,13 @@ fun GymApp(viewModel: GymViewModel) {
                 val dateKey = selectedDate.toString()
                 val sessionForDay = state.data.sessions.firstOrNull { it.date == dateKey }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
+                val drawerWidth = minOf(LocalConfiguration.current.screenWidthDp.dp * 0.7f, 320.dp)
                 BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     gesturesEnabled = true,
                     drawerContent = {
-                        ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.25f)) {
+                        ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
                             Text("GymStatistics", modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.titleLarge)
                             NavigationDrawerItem(
                                 label = { Text("训练计划") },
@@ -294,7 +297,6 @@ fun GymApp(viewModel: GymViewModel) {
                                 weekNavigation = weekNavigation.pageIfRevision(revision, direction)
                             },
                         )
-                        WorkoutModeSwitch(selected = workoutMode, onSelected = { workoutMode = it })
                         BoxWithConstraints(
                             modifier = Modifier
                                 .weight(1f)
@@ -459,6 +461,8 @@ fun GymApp(viewModel: GymViewModel) {
             Screen.SETTINGS -> SettingsPage(
                 viewModel = viewModel,
                 snackbarHostState = snackbarHostState,
+                selectedWorkoutMode = workoutMode,
+                onWorkoutModeChange = { workoutMode = it },
                 onBack = { screen = Screen.MAIN },
                 onSync = { screen = Screen.SYNC },
             )
@@ -731,11 +735,15 @@ private fun exerciseLine(ex: PlannedExercise): String = exerciseLine(
 )
 
 @Composable
-private fun WorkoutModeSwitch(selected: WorkoutMode, onSelected: (WorkoutMode) -> Unit) {
+private fun WorkoutModeSwitch(
+    selected: WorkoutMode,
+    onSelected: (WorkoutMode) -> Unit,
+    horizontalPadding: Dp = 16.dp,
+) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = horizontalPadding, vertical = 6.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -1410,6 +1418,8 @@ private fun HistoryActionPickerPage(
 private fun SettingsPage(
     viewModel: GymViewModel,
     snackbarHostState: SnackbarHostState,
+    selectedWorkoutMode: WorkoutMode,
+    onWorkoutModeChange: (WorkoutMode) -> Unit,
     onBack: () -> Unit,
     onSync: () -> Unit,
 ) {
@@ -1429,6 +1439,14 @@ private fun SettingsPage(
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+            Text("训练模式", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            WorkoutModeSwitch(
+                selected = selectedWorkoutMode,
+                onSelected = onWorkoutModeChange,
+                horizontalPadding = 0.dp,
+            )
+            Spacer(Modifier.height(24.dp))
             Text("AI 食物分析", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(10.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
