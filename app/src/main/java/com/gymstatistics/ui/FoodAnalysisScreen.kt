@@ -11,12 +11,22 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +83,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -400,23 +411,33 @@ fun FoodAnalysisScreen(viewModel: GymViewModel, onBack: () -> Unit) {
                         if (state.deepSeekKeyConfigured) galleryPicker.launch("image/*") else showKeyDialog = true
                     },
                     onCapture = { cameraView ->
-                        if (!cameraPermissionGranted) {
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                        } else if (!state.deepSeekKeyConfigured) {
-                            showKeyDialog = true
-                        } else if (cameraView == null) {
-                            captureError = "相机正在启动，请稍后再试"
-                        } else if (!state.foodAnalysisLoading) {
-                            captureError = null
-                            val file = createFoodCameraFile(context)
-                            cameraView.takePicture(
-                                file,
-                                onSaved = { capturedPhoto = file },
-                                onError = {
-                                    file.delete()
-                                    captureError = "拍照失败：$it"
-                                },
-                            )
+                        when {
+                            !cameraPermissionGranted -> {
+                                permissionLauncher.launch(Manifest.permission.CAMERA)
+                                false
+                            }
+                            !state.deepSeekKeyConfigured -> {
+                                showKeyDialog = true
+                                false
+                            }
+                            cameraView == null -> {
+                                captureError = "相机正在启动，请稍后再试"
+                                false
+                            }
+                            state.foodAnalysisLoading -> false
+                            else -> {
+                                captureError = null
+                                val file = createFoodCameraFile(context)
+                                cameraView.takePicture(
+                                    file,
+                                    onSaved = { capturedPhoto = file },
+                                    onError = {
+                                        file.delete()
+                                        captureError = "拍照失败：$it"
+                                    },
+                                )
+                                true
+                            }
                         }
                     },
                     onHistory = {
@@ -484,7 +505,7 @@ private fun FoodCameraSurface(
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onGallery: () -> Unit,
-    onCapture: (FoodCameraView?) -> Unit,
+    onCapture: (FoodCameraView?) -> Boolean,
     onHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -493,6 +514,17 @@ private fun FoodCameraSurface(
     val letterboxColor = MaterialTheme.colorScheme.surface.toArgb()
     val cameraControlColor = MaterialTheme.colorScheme.primary
     val cameraControlContentColor = MaterialTheme.colorScheme.onPrimary
+    var controlsVisible by remember { mutableStateOf(false) }
+    val flashAlpha = remember { Animatable(0f) }
+    val animationScope = rememberCoroutineScope()
+    val shutterInteractionSource = remember { MutableInteractionSource() }
+    val shutterPressed by shutterInteractionSource.collectIsPressedAsState()
+    val shutterScale by animateFloatAsState(
+        targetValue = if (shutterPressed) 0.88f else 1f,
+        animationSpec = tween(130),
+        label = "food-camera-shutter-scale",
+    )
+    LaunchedEffect(Unit) { controlsVisible = true }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -536,75 +568,100 @@ private fun FoodCameraSurface(
             }
         }
 
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp)
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(cameraControlColor),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "返回",
-                tint = cameraControlContentColor,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        IconButton(
-            onClick = onSettings,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(cameraControlColor)
-                .semantics { contentDescription = "配置 API Key" },
-        ) {
-            Icon(
-                Icons.Rounded.Key,
-                contentDescription = null,
-                tint = cameraControlContentColor,
-                modifier = Modifier.size(30.dp),
-            )
-        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = flashAlpha.value }
+                .background(Color.White),
+        )
 
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(tween(240)) + slideInVertically(tween(240)) { -it / 4 },
+            modifier = Modifier.align(Alignment.TopStart),
         ) {
-            CameraCornerAction(CameraActionIcon.GALLERY, "相册", onGallery,
-                backgroundColor = cameraControlColor,
-                contentColor = cameraControlContentColor,
-            )
             IconButton(
-                onClick = { onCapture(cameraView) },
-                enabled = !loading,
-                modifier = Modifier
-                    .size(84.dp)
-                    .clip(CircleShape)
-                    .background(cameraControlColor)
-                    .semantics { contentDescription = "拍摄照片" },
+                onClick = onBack,
+                modifier = Modifier.padding(12.dp).size(56.dp).clip(CircleShape).background(cameraControlColor),
             ) {
-                Box(
-                    Modifier
-                        .size(66.dp)
-                        .clip(CircleShape)
-                        .background(cameraControlContentColor)
-                        .padding(5.dp)
-                        .clip(CircleShape)
-                        .background(cameraControlColor),
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = cameraControlContentColor,
+                    modifier = Modifier.size(28.dp),
                 )
             }
-            CameraCornerAction(CameraActionIcon.HISTORY, "历史", onHistory,
-                backgroundColor = cameraControlColor,
-                contentColor = cameraControlContentColor,
-            )
+        }
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(tween(240)) + slideInVertically(tween(240)) { -it / 4 },
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            IconButton(
+                onClick = onSettings,
+                modifier = Modifier
+                    .padding(12.dp)
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(cameraControlColor)
+                    .semantics { contentDescription = "配置 API Key" },
+            ) {
+                Icon(
+                    Icons.Rounded.Key,
+                    contentDescription = null,
+                    tint = cameraControlContentColor,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(tween(280)) + slideInVertically(tween(280)) { it / 4 },
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CameraCornerAction(CameraActionIcon.GALLERY, "相册", onGallery,
+                    backgroundColor = cameraControlColor,
+                    contentColor = cameraControlContentColor,
+                )
+                IconButton(
+                    onClick = {
+                        if (onCapture(cameraView)) {
+                            animationScope.launch {
+                                flashAlpha.snapTo(0.48f)
+                                flashAlpha.animateTo(0f, tween(250))
+                            }
+                        }
+                    },
+                    enabled = !loading,
+                    interactionSource = shutterInteractionSource,
+                    modifier = Modifier
+                        .size(84.dp)
+                        .graphicsLayer { scaleX = shutterScale; scaleY = shutterScale }
+                        .clip(CircleShape)
+                        .background(cameraControlColor)
+                        .semantics { contentDescription = "拍摄照片" },
+                ) {
+                    Box(
+                        Modifier
+                            .size(66.dp)
+                            .clip(CircleShape)
+                            .background(cameraControlContentColor)
+                            .padding(5.dp)
+                            .clip(CircleShape)
+                            .background(cameraControlColor),
+                    )
+                }
+                CameraCornerAction(CameraActionIcon.HISTORY, "历史", onHistory,
+                    backgroundColor = cameraControlColor,
+                    contentColor = cameraControlContentColor,
+                )
+            }
         }
 
         if (loading) {
@@ -684,15 +741,26 @@ private fun FoodPhotoConfirmation(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
-            if (bitmap != null) {
-                Image(
-                    bitmap.asImageBitmap(),
-                    contentDescription = "待确认的食物照片",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                Text("照片加载失败，请重新拍摄", color = MaterialTheme.colorScheme.error)
+            AnimatedContent(
+                targetState = bitmap,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + scaleIn(initialScale = 0.96f, animationSpec = tween(220))) togetherWith
+                        fadeOut(tween(140))
+                },
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+                label = "food-photo-preview",
+            ) { displayedBitmap ->
+                if (displayedBitmap != null) {
+                    Image(
+                        displayedBitmap.asImageBitmap(),
+                        contentDescription = "待确认的食物照片",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Text("照片加载失败，请重新拍摄", color = MaterialTheme.colorScheme.error)
+                }
             }
         }
         Row(
