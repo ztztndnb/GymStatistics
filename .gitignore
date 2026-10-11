@@ -44,3 +44,6 @@ keystore/
 
 ### CodeGraph ###
 .codegraph/
+
+### Documentation ###
+/docs/
