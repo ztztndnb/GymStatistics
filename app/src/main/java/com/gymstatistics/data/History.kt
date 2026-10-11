@@ -19,6 +19,22 @@ data class ActionRecord(
             val s = sets ?: 1
             return c * s
         }
+
+    /** 数值 × 个数 × 组数，未填写组数时按 1 组计算。 */
+    val weightCoefficient: Double?
+        get() {
+            val value = data ?: return null
+            val repetitions = count ?: return null
+            return (value * repetitions.toDouble() * (sets ?: 1).toDouble()).takeIf { it.isFinite() }
+        }
+}
+
+enum class ActionRecordSort(val label: String) {
+    TIME("时间"),
+    WEIGHT_COEFFICIENT("重量系数"),
+    VALUE("数值"),
+    COUNT("个数"),
+    SETS("组数"),
 }
 
 /** Aggregates all occurrences sharing the same action name. */
@@ -85,8 +101,8 @@ fun fatigueWarningsFor(
 
 /**
  * Group all session exercises by name (same name = same action).
- * Each action's records are sorted with [actionComparator]; the action list
- * itself is sorted by added count descending.
+ * Each action's records default to newest date first; the action list itself
+ * is sorted by added count descending.
  */
 fun buildActions(sessions: List<SessionRecord>): List<ActionSummary> {
     val grouped = sessions
@@ -97,18 +113,35 @@ fun buildActions(sessions: List<SessionRecord>): List<ActionSummary> {
     }.sortedByDescending { it.addedCount }
 }
 
-/**
- * Within an action:
- *  unit 按字典序降序, 无单位(空)最低; 单位相同按 data 降序; data 相同按 totalCount(个数×组数)降序;
- *  totalCount 相同按 sets 降序; sets 相同按 count 降序.
- */
-fun actionComparator(): Comparator<ActionRecord> =
-    compareByDescending<ActionRecord> { if (it.unit.isEmpty()) 0 else 1 }
-        .thenByDescending { it.unit }
-        .thenByDescending { it.data ?: Double.NEGATIVE_INFINITY }
-        .thenByDescending { it.totalCount ?: Int.MIN_VALUE }
-        .thenByDescending { it.sets ?: Int.MIN_VALUE }
-        .thenByDescending { it.count ?: Int.MIN_VALUE }
+/** Missing metric values remain last in either direction; ties prefer newer dates. */
+fun actionComparator(
+    sortBy: ActionRecordSort = ActionRecordSort.TIME,
+    descending: Boolean = true,
+): Comparator<ActionRecord> {
+    if (sortBy == ActionRecordSort.TIME) {
+        return if (descending) compareByDescending { it.date } else compareBy { it.date }
+    }
+    val metric: (ActionRecord) -> Double? = { record ->
+        when (sortBy) {
+            ActionRecordSort.WEIGHT_COEFFICIENT -> record.weightCoefficient
+            ActionRecordSort.VALUE -> record.data?.takeIf { it.isFinite() }
+            ActionRecordSort.COUNT -> record.count?.toDouble()
+            ActionRecordSort.SETS -> record.sets?.toDouble()
+            ActionRecordSort.TIME -> null
+        }
+    }
+    return Comparator<ActionRecord> { left, right ->
+        val leftValue = metric(left)
+        val rightValue = metric(right)
+        when {
+            leftValue == null && rightValue == null -> 0
+            leftValue == null -> 1
+            rightValue == null -> -1
+            descending -> rightValue.compareTo(leftValue)
+            else -> leftValue.compareTo(rightValue)
+        }
+    }.thenByDescending { it.date }
+}
 
 /** Per-unit (date -> data) series for this action. */
 fun buildSeriesByData(a: ActionSummary): List<ChartSeries> =

@@ -66,6 +66,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -132,6 +134,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.ActionRecord
+import com.gymstatistics.data.ActionRecordSort
 import com.gymstatistics.data.ActionSummary
 import com.gymstatistics.data.AppJson
 import com.gymstatistics.data.ChartSeries
@@ -145,6 +148,7 @@ import com.gymstatistics.data.TrainingPlan
 import com.gymstatistics.data.TrainingPlanDay
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.buildActions
+import com.gymstatistics.data.actionComparator
 import com.gymstatistics.data.buildSeriesByData
 import com.gymstatistics.data.buildSeriesByTotalCount
 import com.gymstatistics.data.fatigueWarningsFor
@@ -2139,6 +2143,11 @@ private fun HistoryScreen(
                     }
                 }
             } else {
+                var recordSort by remember(act.name) { mutableStateOf(ActionRecordSort.TIME) }
+                var sortDescending by remember(act.name) { mutableStateOf(true) }
+                val sortedRecords = remember(act.records, recordSort, sortDescending) {
+                    act.records.sortedWith(actionComparator(recordSort, sortDescending))
+                }
                 Column(
                     modifier = Modifier
                         .padding(padding)
@@ -2198,7 +2207,17 @@ private fun HistoryScreen(
                         }
                     }
 
-                    act.records.forEach { r ->
+                    HistoryRecordSortControls(
+                        sortBy = recordSort,
+                        descending = sortDescending,
+                        onSortChanged = {
+                            recordSort = it
+                            sortDescending = true
+                        },
+                        onToggleDirection = { sortDescending = !sortDescending },
+                    )
+
+                    sortedRecords.forEach { r ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2240,6 +2259,57 @@ private fun HistoryScreen(
                 editingMusclesFor = null
             },
         )
+    }
+}
+
+@Composable
+private fun HistoryRecordSortControls(
+    sortBy: ActionRecordSort,
+    descending: Boolean,
+    onSortChanged: (ActionRecordSort) -> Unit,
+    onToggleDirection: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f)) {
+                OutlinedButton(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("排序：${sortBy.label}")
+                    Icon(Icons.Filled.ExpandMore, contentDescription = null)
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    ActionRecordSort.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.label) },
+                            onClick = {
+                                if (option != sortBy) onSortChanged(option)
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+            OutlinedButton(onClick = onToggleDirection, modifier = Modifier.weight(1f)) {
+                Text(
+                    if (sortBy == ActionRecordSort.TIME) {
+                        if (descending) "最新在前" else "最早在前"
+                    } else {
+                        if (descending) "从大到小" else "从小到大"
+                    },
+                )
+            }
+        }
+        if (sortBy == ActionRecordSort.WEIGHT_COEFFICIENT) {
+            Text(
+                "重量系数 = 数值 × 个数 × 组数；未填组数按 1 组计算",
+                modifier = Modifier.padding(top = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

@@ -274,10 +274,14 @@ test("food report and ingredient editor use animated panel transitions", () => {
 });
 
 test("food analysis panel transitions use horizontal sliding without fade-only blending", () => {
-  assert.match(foodUiSource, /isFoodPanelBackNavigation/);
-  assert.match(foodUiSource, /slideInHorizontally\(initialOffsetX = \{ -it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ it \}\)/);
-  assert.match(foodUiSource, /slideInHorizontally\(initialOffsetX = \{ it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ -it \}\)/);
-  assert.doesNotMatch(foodUiSource, /fadeIn|fadeOut/);
+  const panelStart = foodUiSource.indexOf("targetState = foodPanel,");
+  const panelEnd = foodUiSource.indexOf('label = "food-analysis-panel"', panelStart);
+  assert.ok(panelStart >= 0 && panelEnd > panelStart);
+  const panelTransitionSource = foodUiSource.slice(panelStart, panelEnd);
+  assert.match(panelTransitionSource, /isFoodPanelBackNavigation/);
+  assert.match(panelTransitionSource, /slideInHorizontally\(initialOffsetX = \{ -it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ it \}\)/);
+  assert.match(panelTransitionSource, /slideInHorizontally\(initialOffsetX = \{ it \}\) togetherWith\s*slideOutHorizontally\(targetOffsetX = \{ -it \}\)/);
+  assert.doesNotMatch(panelTransitionSource, /fadeIn|fadeOut/);
 });
 
 test("camera crops captured photos to the same centered aspect ratio as the preview", () => {
@@ -323,11 +327,11 @@ test("settings shows API key save and error messages", () => {
   assert.match(settingsPage, /snackbarHost = \{ SnackbarHost\(snackbarHostState\) \}/);
 });
 
-test("release metadata is 1.3.1 with the requested APK name", () => {
+test("release metadata is 1.3.2 with the requested APK name", () => {
   const buildSource = source("app/build.gradle.kts");
-  assert.match(buildSource, /versionCode = 49/);
-  assert.match(buildSource, /versionName = "1\.3\.1"/);
+  assert.match(buildSource, /versionCode = 50/);
+  assert.match(buildSource, /versionName = "1\.3\.2"/);
   assert.match(buildSource, /register\("copyReleaseApkWithVersion"\)/);
   assert.match(buildSource, /source\.copyTo\(target, overwrite = true\)/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.1\.apk/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.2\.apk/);
 });
