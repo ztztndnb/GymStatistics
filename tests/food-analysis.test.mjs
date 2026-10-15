@@ -73,9 +73,9 @@ test("food prompt handles meal photos and labels with per-100g output", () => {
   assert.match(promptSource, /二维码|条形码/);
 });
 
-test("main menu replaces the food button with a camera icon beside history", () => {
-  assert.match(uiSource, /TextButton\(onClick = \{ historySelected = null; screen = Screen\.HISTORY \}\) \{ Text\("历史"\) \}/);
-  assert.match(uiSource, /IconButton\(\s*onClick = \{ screen = Screen\.FOOD \},/);
+test("home exposes the camera and settings as icon actions", () => {
+  assert.match(uiSource, /IconButton\(\s*onClick = \{ navigation = navigation\.open\(Screen\.FOOD\) \},/);
+  assert.match(uiSource, /IconButton\(onClick = \{ navigation = navigation\.open\(Screen\.SETTINGS\) \}\)/);
   assert.match(uiSource, /Icons\.Rounded\.PhotoCamera/);
   assert.doesNotMatch(uiSource, /Text\("AI食物分析"\)/);
 });
@@ -327,11 +327,11 @@ test("settings shows API key save and error messages", () => {
   assert.match(settingsPage, /snackbarHost = \{ SnackbarHost\(snackbarHostState\) \}/);
 });
 
-test("release metadata is 1.3.2 with the requested APK name", () => {
+test("release metadata is 1.3.3 with the requested APK name", () => {
   const buildSource = source("app/build.gradle.kts");
-  assert.match(buildSource, /versionCode = 50/);
-  assert.match(buildSource, /versionName = "1\.3\.2"/);
+  assert.match(buildSource, /versionCode = 51/);
+  assert.match(buildSource, /versionName = "1\.3\.3"/);
   assert.match(buildSource, /register\("copyReleaseApkWithVersion"\)/);
   assert.match(buildSource, /source\.copyTo\(target, overwrite = true\)/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.2\.apk/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.3\.apk/);
 });

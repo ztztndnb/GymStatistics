@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,7 +52,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -61,11 +62,15 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.PlayCircleFilled
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
@@ -73,9 +78,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -85,7 +89,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,7 +111,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -169,8 +171,6 @@ import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private enum class Screen { MAIN, PLAN, HISTORY, SETTINGS, SYNC, FOOD }
-
 private enum class WorkoutMode { MANUAL, PLAN }
 
 private const val MIN_SWIPE_DISTANCE = 100f
@@ -181,8 +181,8 @@ private const val MIN_FLING_VELOCITY = 1000f
 fun GymApp(viewModel: GymViewModel) {
     val state = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
-    var screen by remember { mutableStateOf(Screen.MAIN) }
-    var historySelected by remember { mutableStateOf<String?>(null) }
+    var navigation by remember { mutableStateOf(AppNavigationState()) }
+    val screen = navigation.screen
     var weekNavigation by remember { mutableStateOf(WeekNavigation(LocalDate.now())) }
     val selectedDate = weekNavigation.selectedDate
     val currentSelectedDate by rememberUpdatedState(selectedDate)
@@ -200,280 +200,261 @@ fun GymApp(viewModel: GymViewModel) {
     val settleOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    AnimatedContent(
-        targetState = screen,
-        transitionSpec = {
-            // forward: new screen slides in from the right; backward: from the left (like a back navigation)
-            if (targetState.ordinal >= initialState.ordinal) {
-                (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
-            } else {
-                (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+    Scaffold(
+        bottomBar = {
+            if (navigation.showBottomNavigation) {
+                MainBottomNavigation(
+                    selectedTab = navigation.selectedTab,
+                    onSelect = { navigation = navigation.selectTab(it) },
+                )
             }
         },
-        label = "screen",
-    ) { scr ->
-        when (scr) {
-            Screen.MAIN -> {
-                val dateKey = selectedDate.toString()
-                val sessionForDay = state.data.sessions.firstOrNull { it.date == dateKey }
-                val drawerState = rememberDrawerState(DrawerValue.Closed)
-                val drawerWidth = minOf(LocalConfiguration.current.screenWidthDp.dp * 0.7f, 320.dp)
-                BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
-                ModalNavigationDrawer(
-                    drawerState = drawerState,
-                    gesturesEnabled = true,
-                    drawerContent = {
-                        ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
-                            Text("GymStatistics", modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.titleLarge)
-                            NavigationDrawerItem(
-                                label = { Text("训练计划") },
-                                selected = false,
-                                onClick = {
-                                    scope.launch {
-                                        drawerState.close()
-                                        screen = Screen.PLAN
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    ) { navigationPadding ->
+        AnimatedContent(
+            targetState = screen,
+            modifier = Modifier.padding(navigationPadding).consumeWindowInsets(navigationPadding),
+            transitionSpec = {
+                // forward: new screen slides in from the right; backward: from the left (like a back navigation)
+                if (targetState.ordinal >= initialState.ordinal) {
+                    (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+                }
+            },
+            label = "screen",
+        ) { scr ->
+            when (scr) {
+                Screen.MAIN -> {
+                    val dateKey = selectedDate.toString()
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        "GymStatistics",
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                },
+                                actions = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { navigation = navigation.open(Screen.FOOD) },
+                                            modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.PhotoCamera,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurface,
+                                            )
+                                        }
+                                        IconButton(onClick = { navigation = navigation.open(Screen.SETTINGS) }) {
+                                            Icon(Icons.Filled.Settings, contentDescription = "设置")
+                                        }
                                     }
                                 },
-                                icon = { Icon(Icons.AutoMirrored.Filled.EventNote, contentDescription = null) },
-                                modifier = Modifier.padding(horizontal = 12.dp),
                             )
-                            NavigationDrawerItem(
-                                label = { Text("设置") },
-                                selected = false,
-                                onClick = {
-                                    scope.launch {
-                                        drawerState.close()
-                                        screen = Screen.SETTINGS
-                                    }
+                        },
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                    ) { padding ->
+                        Column(
+                            modifier = Modifier
+                                .padding(padding)
+                                .fillMaxSize()
+                        ) {
+                            DatePickerHeader(
+                                selectedDate = selectedDate,
+                                visibleWeekStart = weekNavigation.visibleWeekStart,
+                                onOpenCalendar = { showCalendar = true },
+                            )
+                            WeekDayBar(
+                                selectedDate = selectedDate,
+                                visibleWeekStart = weekNavigation.visibleWeekStart,
+                                revision = weekNavigation.revision,
+                                onSelect = { weekNavigation = weekNavigation.select(it) },
+                                onPage = { revision, direction ->
+                                    weekNavigation = weekNavigation.pageIfRevision(revision, direction)
                                 },
-                                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                modifier = Modifier.padding(horizontal = 12.dp),
                             )
-                        }
-                    },
-                ) {
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    "GymStatistics",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable { scope.launch { drawerState.open() } }
-                                        .semantics { contentDescription = "打开侧边栏" },
-                                )
-                            },
-                            actions = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    TextButton(onClick = { historySelected = null; screen = Screen.HISTORY }) { Text("历史") }
-                                    IconButton(
-                                        onClick = { screen = Screen.FOOD },
-                                        modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.PhotoCamera,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurface,
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .pointerInput(Unit) {
+                                        val velocityTracker = VelocityTracker()
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                dragOffset = 0f
+                                                dragDirection = 0
+                                                lastDragDirection = 0
+                                                velocityTracker.resetTracking()
+                                            },
+                                            onDragEnd = {
+                                                val direction = dragDirection
+                                                val signedDistance = -dragOffset * direction
+                                                val signedVelocity = -velocityTracker.calculateVelocity().x * direction
+                                                val isMovingBack = direction == 0 ||
+                                                    lastDragDirection == direction ||
+                                                    signedVelocity < -MIN_FLING_VELOCITY
+                                                val commit = !isMovingBack &&
+                                                    (signedDistance >= MIN_SWIPE_DISTANCE || signedVelocity >= MIN_FLING_VELOCITY)
+                                                val target = if (commit) -direction * size.width.toFloat() else 0f
+                                                velocityTracker.resetTracking()
+                                                scope.launch {
+                                                    isSettling = true
+                                                    settleOffset.snapTo(dragOffset)
+                                                    settleOffset.animateTo(target, tween(220))
+                                                    if (commit) weekNavigation = weekNavigation.select(currentSelectedDate.plusDays(direction.toLong()))
+                                                    dragOffset = 0f
+                                                    dragDirection = 0
+                                                    settleOffset.snapTo(0f)
+                                                    isSettling = false
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                velocityTracker.resetTracking()
+                                                scope.launch {
+                                                    isSettling = true
+                                                    settleOffset.snapTo(dragOffset)
+                                                    settleOffset.animateTo(0f, tween(220))
+                                                    dragOffset = 0f
+                                                    dragDirection = 0
+                                                    settleOffset.snapTo(0f)
+                                                    isSettling = false
+                                                }
+                                            },
+                                        ) { change, amount ->
+                                            velocityTracker.addPosition(change.uptimeMillis, change.position)
+                                            if (dragDirection == 0 && amount != 0f) {
+                                                dragDirection = if (amount < 0f) 1 else -1
+                                            }
+                                            if (amount != 0f) lastDragDirection = if (amount < 0f) -1 else 1
+                                            dragOffset = (dragOffset + amount).coerceIn(-size.width.toFloat(), size.width.toFloat())
+                                        }
+                                    },
+                            ) {
+                                val pageWidth = with(LocalDensity.current) { maxWidth.toPx() }
+                                val contentOffset = if (isSettling) settleOffset.value else dragOffset
+                                Box(Modifier.fillMaxSize()) {
+                                    if (dragDirection != 0) {
+                                        DayModeContent(
+                                            mode = workoutMode,
+                                            date = selectedDate.plusDays(dragDirection.toLong()),
+                                            sessions = state.data.sessions,
+                                            plan = state.data.trainingPlan,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
+                                            onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                            onDelete = { confirmDeleteId = it },
+                                            onReorderManual = { id, direction -> viewModel.reorderExercises(selectedDate.plusDays(dragDirection.toLong()).toString(), id, direction) },
+                                            onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
+                                            onCancelComplete = { id -> viewModel.cancelPlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                         )
                                     }
-                                }
-                            },
-                        )
-                    },
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                ) { padding ->
-                    Column(
-                        modifier = Modifier
-                            .padding(padding)
-                            .fillMaxSize()
-                    ) {
-                        DatePickerHeader(
-                            selectedDate = selectedDate,
-                            visibleWeekStart = weekNavigation.visibleWeekStart,
-                            onOpenCalendar = { showCalendar = true },
-                        )
-                        WeekDayBar(
-                            selectedDate = selectedDate,
-                            visibleWeekStart = weekNavigation.visibleWeekStart,
-                            revision = weekNavigation.revision,
-                            onSelect = { weekNavigation = weekNavigation.select(it) },
-                            onPage = { revision, direction ->
-                                weekNavigation = weekNavigation.pageIfRevision(revision, direction)
-                            },
-                        )
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .weight(1f)
-                                .pointerInput(Unit) {
-                                    val velocityTracker = VelocityTracker()
-                                    detectHorizontalDragGestures(
-                                        onDragStart = {
-                                            dragOffset = 0f
-                                            dragDirection = 0
-                                            lastDragDirection = 0
-                                            velocityTracker.resetTracking()
-                                        },
-                                        onDragEnd = {
-                                            val direction = dragDirection
-                                            val signedDistance = -dragOffset * direction
-                                            val signedVelocity = -velocityTracker.calculateVelocity().x * direction
-                                            val isMovingBack = direction == 0 ||
-                                                lastDragDirection == direction ||
-                                                signedVelocity < -MIN_FLING_VELOCITY
-                                            val commit = !isMovingBack &&
-                                                (signedDistance >= MIN_SWIPE_DISTANCE || signedVelocity >= MIN_FLING_VELOCITY)
-                                            val target = if (commit) -direction * size.width.toFloat() else 0f
-                                            velocityTracker.resetTracking()
-                                            scope.launch {
-                                                isSettling = true
-                                                settleOffset.snapTo(dragOffset)
-                                                settleOffset.animateTo(target, tween(220))
-                                                if (commit) weekNavigation = weekNavigation.select(currentSelectedDate.plusDays(direction.toLong()))
-                                                dragOffset = 0f
-                                                dragDirection = 0
-                                                settleOffset.snapTo(0f)
-                                                isSettling = false
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            velocityTracker.resetTracking()
-                                            scope.launch {
-                                                isSettling = true
-                                                settleOffset.snapTo(dragOffset)
-                                                settleOffset.animateTo(0f, tween(220))
-                                                dragOffset = 0f
-                                                dragDirection = 0
-                                                settleOffset.snapTo(0f)
-                                                isSettling = false
-                                            }
-                                        },
-                                    ) { change, amount ->
-                                        velocityTracker.addPosition(change.uptimeMillis, change.position)
-                                        if (dragDirection == 0 && amount != 0f) {
-                                            dragDirection = if (amount < 0f) 1 else -1
-                                        }
-                                        if (amount != 0f) lastDragDirection = if (amount < 0f) -1 else 1
-                                        dragOffset = (dragOffset + amount).coerceIn(-size.width.toFloat(), size.width.toFloat())
-                                    }
-                                },
-                        ) {
-                            val pageWidth = with(LocalDensity.current) { maxWidth.toPx() }
-                            val contentOffset = if (isSettling) settleOffset.value else dragOffset
-                            Box(Modifier.fillMaxSize()) {
-                                if (dragDirection != 0) {
                                     DayModeContent(
                                         mode = workoutMode,
-                                        date = selectedDate.plusDays(dragDirection.toLong()),
+                                        date = selectedDate,
                                         sessions = state.data.sessions,
                                         plan = state.data.trainingPlan,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
-                                        onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
-                                        onDelete = { confirmDeleteId = it },
-                                        onReorderManual = { id, direction -> viewModel.reorderExercises(selectedDate.plusDays(dragDirection.toLong()).toString(), id, direction) },
-                                        onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
-                                        onCancelComplete = { id -> viewModel.cancelPlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
+                                            .graphicsLayer { translationX = contentOffset },
+                                            onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
+                                            onDelete = { confirmDeleteId = it },
+                                            onReorderManual = { id, direction -> viewModel.reorderExercises(dateKey, id, direction) },
+                                            onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
+                                            onCancelComplete = { id -> viewModel.cancelPlannedExercise(dateKey, id) },
                                     )
                                 }
-                                DayModeContent(
-                                    mode = workoutMode,
-                                    date = selectedDate,
-                                    sessions = state.data.sessions,
-                                    plan = state.data.trainingPlan,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer { translationX = contentOffset },
-                                        onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
-                                        onDelete = { confirmDeleteId = it },
-                                        onReorderManual = { id, direction -> viewModel.reorderExercises(dateKey, id, direction) },
-                                        onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
-                                        onCancelComplete = { id -> viewModel.cancelPlannedExercise(dateKey, id) },
-                                )
                             }
-                        }
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            ElevatedButton(
-                                onClick = { editingExerciseId = null; prefillExercise = null; showAdd = true },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Filled.Add, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("记录动作")
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                ElevatedButton(
+                                    onClick = { editingExerciseId = null; prefillExercise = null; showAdd = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(Icons.Filled.Add, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("记录动作")
+                                }
                             }
                         }
                     }
-                }
-                }
 
-                if (showCalendar) {
-                    MonthCalendarDialog(
-                        initial = selectedDate,
-                        onDismiss = { showCalendar = false },
-                        onSelect = { weekNavigation = weekNavigation.select(it); showCalendar = false },
-                    )
-                }
-                if (showAdd) {
-                    AddSessionDialog(
-                        defaultDate = selectedDate,
-                        initial = prefillExercise,
-                        initialNote = prefillExercise?.note ?: "",
-                        isEditing = editingExerciseId != null,
-                        onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
-                        onConfirm = { date, note, exercise ->
-                            if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
-                            else {
-                                val planDay = state.data.trainingPlan?.days?.firstOrNull { it.weekday == planDayIndex(selectedDate) }
-                                val completed = completedPlanExerciseIds(state.data.sessions.firstOrNull { it.date == date })
-                                val matchingPlan = planDay?.exercises?.firstOrNull {
-                                    it.name == exercise.name && it.id !in completed && exercise.plannedExerciseId == null
+                    if (showCalendar) {
+                        MonthCalendarDialog(
+                            initial = selectedDate,
+                            onDismiss = { showCalendar = false },
+                            onSelect = { weekNavigation = weekNavigation.select(it); showCalendar = false },
+                        )
+                    }
+                    if (showAdd) {
+                        AddSessionDialog(
+                            defaultDate = selectedDate,
+                            initial = prefillExercise,
+                            initialNote = prefillExercise?.note ?: "",
+                            isEditing = editingExerciseId != null,
+                            onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
+                            onConfirm = { date, note, exercise ->
+                                if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
+                                else {
+                                    val planDay = state.data.trainingPlan?.days?.firstOrNull { it.weekday == planDayIndex(selectedDate) }
+                                    val completed = completedPlanExerciseIds(state.data.sessions.firstOrNull { it.date == date })
+                                    val matchingPlan = planDay?.exercises?.firstOrNull {
+                                        it.name == exercise.name && it.id !in completed && exercise.plannedExerciseId == null
+                                    }
+                                    viewModel.addExercise(date, note, exercise)
+                                    if (matchingPlan != null) pendingPlanAssociation = exercise.id to matchingPlan.id
                                 }
-                                viewModel.addExercise(date, note, exercise)
-                                if (matchingPlan != null) pendingPlanAssociation = exercise.id to matchingPlan.id
-                            }
-                            showAdd = false; editingExerciseId = null; prefillExercise = null
-                        },
-                    )
+                                showAdd = false; editingExerciseId = null; prefillExercise = null
+                            },
+                        )
+                    }
+                    if (confirmDeleteId != null) {
+                        AlertDialog(
+                            onDismissRequest = { confirmDeleteId = null },
+                            title = { Text("删除动作") },
+                            text = { Text("确定删除这条动作记录吗?") },
+                            confirmButton = { TextButton(onClick = { viewModel.deleteExercise(dateKey, confirmDeleteId!!); confirmDeleteId = null }) { Text("删除") } },
+                            dismissButton = { TextButton(onClick = { confirmDeleteId = null }) { Text("取消") } },
+                        )
+                    }
                 }
-                if (confirmDeleteId != null) {
-                    AlertDialog(
-                        onDismissRequest = { confirmDeleteId = null },
-                        title = { Text("删除动作") },
-                        text = { Text("确定删除这条动作记录吗?") },
-                        confirmButton = { TextButton(onClick = { viewModel.deleteExercise(dateKey, confirmDeleteId!!); confirmDeleteId = null }) { Text("删除") } },
-                        dismissButton = { TextButton(onClick = { confirmDeleteId = null }) { Text("取消") } },
-                    )
+
+                Screen.START, Screen.STATS -> {
+                    BackHandler { navigation = navigation.back() }
+                    Box(Modifier.fillMaxSize())
                 }
+
+                Screen.HISTORY -> HistoryScreen(
+                    data = state.data,
+                    selectedName = navigation.historyAction,
+                    onSelectedNameChange = { navigation = navigation.selectHistoryAction(it) },
+                    onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
+                    onEditMuscles = { name, muscles -> viewModel.updateMusclesForAction(name, muscles) },
+                    onBack = { navigation = navigation.back() },
+                    onPickFill = { name, record ->
+                        prefillExercise = ExerciseRecord(name = name, data = record.data, unit = record.unit, count = record.count, sets = record.sets, muscles = record.muscles)
+                        editingExerciseId = null
+                        navigation = navigation.selectTab(MainTab.HOME)
+                        showAdd = true
+                    },
+                )
+
+                Screen.PLAN -> TrainingPlanPage(viewModel = viewModel, onBack = { navigation = navigation.back() })
+
+                Screen.SETTINGS -> SettingsPage(
+                    viewModel = viewModel,
+                    snackbarHostState = snackbarHostState,
+                    selectedWorkoutMode = workoutMode,
+                    onWorkoutModeChange = { workoutMode = it },
+                    onBack = { navigation = navigation.back() },
+                    onSync = { navigation = navigation.open(Screen.SYNC) },
+                )
+
+                Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { navigation = navigation.back() })
+
+                Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { navigation = navigation.back() })
             }
-
-            Screen.HISTORY -> HistoryScreen(
-                data = state.data,
-                initial = historySelected,
-                onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
-                onEditMuscles = { name, muscles -> viewModel.updateMusclesForAction(name, muscles) },
-                onBack = { screen = Screen.MAIN },
-                onPickFill = { name, record ->
-                    prefillExercise = ExerciseRecord(name = name, data = record.data, unit = record.unit, count = record.count, sets = record.sets, muscles = record.muscles)
-                    editingExerciseId = null
-                    screen = Screen.MAIN
-                    showAdd = true
-                },
-            )
-
-            Screen.PLAN -> TrainingPlanPage(viewModel = viewModel, onBack = { screen = Screen.MAIN })
-
-            Screen.SETTINGS -> SettingsPage(
-                viewModel = viewModel,
-                snackbarHostState = snackbarHostState,
-                selectedWorkoutMode = workoutMode,
-                onWorkoutModeChange = { workoutMode = it },
-                onBack = { screen = Screen.MAIN },
-                onSync = { screen = Screen.SYNC },
-            )
-
-            Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { screen = Screen.SETTINGS })
-
-            Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { screen = Screen.MAIN })
         }
     }
 
@@ -497,6 +478,33 @@ fun GymApp(viewModel: GymViewModel) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
+        }
+    }
+}
+
+@Composable
+private fun MainBottomNavigation(selectedTab: MainTab, onSelect: (MainTab) -> Unit) {
+    NavigationBar {
+        MainTab.entries.forEach { tab ->
+            NavigationBarItem(
+                selected = selectedTab == tab,
+                onClick = { onSelect(tab) },
+                icon = {
+                    Icon(
+                        imageVector = when (tab) {
+                            MainTab.HOME -> Icons.Rounded.Home
+                            MainTab.PLAN -> Icons.Rounded.CalendarMonth
+                            MainTab.START -> Icons.Rounded.PlayCircleFilled
+                            MainTab.STATS -> Icons.Rounded.BarChart
+                            MainTab.LIBRARY -> Icons.Rounded.FitnessCenter
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(if (tab == MainTab.START) 30.dp else 24.dp),
+                    )
+                },
+                label = { Text(tab.label) },
+                alwaysShowLabel = true,
+            )
         }
     }
 }
@@ -1109,9 +1117,6 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("训练计划", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
-                },
             )
         },
     ) { padding ->
@@ -2068,14 +2073,14 @@ private fun MusclePickerDemo(
 @Composable
 private fun HistoryScreen(
     data: WorkoutData,
-    initial: String?,
+    selectedName: String?,
+    onSelectedNameChange: (String?) -> Unit,
     onSetFatigueSuppressed: (String, Boolean) -> Unit,
     onEditMuscles: (String, List<MuscleSelection>) -> Unit,
     onBack: () -> Unit,
     onPickFill: (name: String, record: ActionRecord) -> Unit,
 ) {
     val actions = remember(data) { buildActions(data.sessions) }
-    var selectedName by remember(initial) { mutableStateOf(initial) }
     var searchQuery by remember { mutableStateOf("") }
     var editingMusclesFor by remember { mutableStateOf<String?>(null) }
     var pendingMuscles by remember { mutableStateOf<List<MuscleSelection>>(emptyList()) }
@@ -2084,15 +2089,17 @@ private fun HistoryScreen(
     val editingAction = actions.firstOrNull { it.name == editingMusclesFor }
     val today = LocalDate.now()
 
-    BackHandler { if (selected != null) selectedName = null else onBack() }
+    BackHandler { if (selected != null) onSelectedNameChange(null) else onBack() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(selected?.name ?: "历史动作", fontWeight = FontWeight.Bold) },
+                title = { Text(selected?.name ?: "动作库", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { if (selected != null) selectedName = null else onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    if (selected != null) {
+                        IconButton(onClick = { onSelectedNameChange(null) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
                     }
                 },
             )
@@ -2136,7 +2143,7 @@ private fun HistoryScreen(
                                 ActionRow(
                                     a = a,
                                     fatigueInfo = fatigueInfoOf(a, actions, today, data.suppressedFatigue),
-                                    onClick = { selectedName = a.name },
+                                    onClick = { onSelectedNameChange(a.name) },
                                 )
                             }
                         }
