@@ -420,10 +420,20 @@ fun GymApp(viewModel: GymViewModel) {
                     }
                 }
 
-                Screen.START, Screen.STATS -> {
+                Screen.START -> {
                     BackHandler { navigation = navigation.back() }
                     Box(Modifier.fillMaxSize())
                 }
+
+                Screen.STATS -> StatisticsScreen(
+                    data = state.data,
+                    onOpenDate = { date ->
+                        weekNavigation = weekNavigation.select(date)
+                        workoutMode = WorkoutMode.MANUAL
+                        navigation = navigation.selectTab(MainTab.HOME)
+                    },
+                    onBack = { navigation = navigation.back() },
+                )
 
                 Screen.HISTORY -> HistoryScreen(
                     data = state.data,

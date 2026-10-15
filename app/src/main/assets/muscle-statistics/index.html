@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>训练肌群分布</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: transparent; color: #242028; font: 12px system-ui,sans-serif; }
+    #maps { height: calc(100vh - 24px); display: flex; justify-content: center; gap: 24px; }
+    figure { margin: 0; height: 100%; display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+    figcaption { line-height: 24px; }
+    svg { width: 100%; height: calc(100% - 24px); }
+    #legend { text-align: center; height: 24px; line-height: 24px; }
+    path { cursor: pointer; transition: fill 180ms; }
+    path:focus { outline: none; stroke-width: .35; }
+  </style>
+</head>
+<body>
+  <div id="maps"><figure><figcaption>正面</figcaption><svg id="front" viewBox="0 0 35 93" role="group" aria-label="正面肌群"></svg></figure><figure><figcaption>背面</figcaption><svg id="back" viewBox="37 0 35 93" role="group" aria-label="背面肌群"></svg></figure></div>
+  <div id="legend">颜色越深，覆盖组数越多 · 点击部位查看</div>
+  <script src="../muscle-picker/body-muscles.umd.min.js"></script>
+  <script>
+    const ns = 'http://www.w3.org/2000/svg';
+    let state = {rows: [], primary: '#6750a4', neutral: '#d7cde0', text: '#242028', selected: null};
+    function setStatistics(next) {
+      state = next;
+      document.body.style.color = next.text;
+      const byId = new Map(next.rows.map(row => [row.id, row]));
+      const max = Math.max(1, ...next.rows.map(row => row.sets));
+      for (const [side, muscles] of [['front', BodyMuscles.FRONT_MUSCLES], ['back', BodyMuscles.BACK_MUSCLES]]) {
+        const svg = document.getElementById(side);
+        if (!svg.hasChildNodes()) muscles.forEach(muscle => {
+          const path = document.createElementNS(ns, 'path');
+          path.dataset.muscleId = muscle.id;
+          path.setAttribute('d', muscle.path);
+          path.setAttribute('role', 'button');
+          path.setAttribute('tabindex', '0');
+          const select = () => { if (window.AndroidStatistics) window.AndroidStatistics.onMuscle(muscle.id); };
+          path.addEventListener('click', select);
+          path.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+          svg.appendChild(path);
+        });
+        for (const path of svg.children) {
+          const id = path.dataset.muscleId;
+          const row = byId.get(id);
+          path.setAttribute('fill', row ? next.primary : next.neutral);
+          path.setAttribute('fill-opacity', row ? String(.25 + .75 * row.sets / max) : '.5');
+          path.setAttribute('stroke', id === next.selected ? next.text : next.background);
+          path.setAttribute('stroke-width', id === next.selected ? '.5' : '.12');
+          path.setAttribute('aria-label', row ? `${row.name}，${row.sets}组` : '该部位没有训练记录');
+          path.setAttribute('aria-pressed', String(id === next.selected));
+        }
+      }
+    }
+    window.setStatistics = setStatistics;
+    setStatistics({...state, background: '#fffaff'});
+  </script>
+</body>
+</html>
