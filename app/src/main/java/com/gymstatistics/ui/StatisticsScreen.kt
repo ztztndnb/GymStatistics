@@ -2,6 +2,7 @@ package com.gymstatistics.ui
 
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -236,7 +237,7 @@ private fun MuscleDistributionCard(statistics: WorkoutStatistics) {
 }
 
 @Composable
-private fun StatisticsBodyMap(rows: List<MuscleWorkload>, selected: String?, onSelect: (String) -> Unit) {
+internal fun StatisticsBodyMap(rows: List<MuscleWorkload>, selected: String?, onSelect: (String) -> Unit) {
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val currentOnSelect by rememberUpdatedState(onSelect)
     val palette = MaterialTheme.colorScheme
@@ -249,26 +250,63 @@ private fun StatisticsBodyMap(rows: List<MuscleWorkload>, selected: String?, onS
     }.toString()
     // onPageFinished reads the latest payload; updates can arrive while the asset loads.
     val currentPayload by rememberUpdatedState(payload)
-    AndroidView(
-        factory = { context ->
-            WebView(context).apply {
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                settings.javaScriptEnabled = true
-                settings.allowContentAccess = false
-                addJavascriptInterface(object {
-                    @JavascriptInterface fun onMuscle(id: String) { mainHandler.post { currentOnSelect(id) } }
-                }, "AndroidStatistics")
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String) { view.evaluateJavascript("setStatistics($currentPayload)", null) }
-                    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean = true
+    var attempt by remember { mutableIntStateOf(0) }
+    var ready by remember(attempt) { mutableStateOf(false) }
+    var loadError by remember(attempt) { mutableStateOf<String?>(null) }
+    LaunchedEffect(attempt) {
+        delay(10_000)
+        if (!ready && loadError == null) loadError = "加载超时，请重试。"
+    }
+    Box(Modifier.fillMaxWidth().height(290.dp)) {
+        key(attempt) {
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        // AndroidView's default WRAP_CONTENT makes WebView resolve CSS vh
+                        // against content height, collapsing the SVG even with a Compose height.
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        settings.javaScriptEnabled = true
+                        settings.allowContentAccess = false
+                        addJavascriptInterface(object {
+                            @JavascriptInterface fun onMuscle(id: String) { mainHandler.post { currentOnSelect(id) } }
+                        }, "AndroidStatistics")
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String) {
+                                if (url != "file:///android_asset/muscle-statistics/index.html") return
+                                val script = "(function(){try{setStatistics($currentPayload);return document.querySelector('#front').getBoundingClientRect().height>0 && document.querySelectorAll('#front path').length>0}catch(e){return false}})()"
+                                view.evaluateJavascript(script) { result ->
+                                    ready = result == "true"
+                                    loadError = if (ready) null else "人体图初始化失败，请重试。"
+                                }
+                            }
+                            override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
+                                if (request.isForMainFrame) { ready = false; loadError = "本地人体图页面无法加载，请重试。" }
+                            }
+                            override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean = true
+                        }
+                        loadUrl("file:///android_asset/muscle-statistics/index.html")
+                    }
+                },
+                update = { if (ready) it.evaluateJavascript("window.setStatistics && setStatistics($payload)", null) },
+                onRelease = { it.removeJavascriptInterface("AndroidStatistics"); it.destroy() },
+                modifier = Modifier.fillMaxSize().semantics { contentDescription = "肌群训练分布图" },
+            )
+        }
+        if (!ready || loadError != null) {
+            Column(
+                Modifier.fillMaxSize().background(palette.surfaceContainerLow).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                if (loadError == null) Text("肌群图加载中…", style = MaterialTheme.typography.bodyMedium) else {
+                    Text("肌群图加载失败", style = MaterialTheme.typography.titleSmall)
+                    Text(loadError.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { attempt++ }) { Text("重试") }
                 }
-                loadUrl("file:///android_asset/muscle-statistics/index.html")
             }
-        },
-        update = { it.evaluateJavascript("window.setStatistics && setStatistics($payload)", null) },
-        onRelease = { it.removeJavascriptInterface("AndroidStatistics"); it.destroy() },
-        modifier = Modifier.fillMaxWidth().height(290.dp),
-    )
+        }
+    }
 }
 
 @Composable

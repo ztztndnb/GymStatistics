@@ -64,7 +64,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.PlayCircleFilled
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.AlertDialog
@@ -420,11 +419,6 @@ fun GymApp(viewModel: GymViewModel) {
                     }
                 }
 
-                Screen.START -> {
-                    BackHandler { navigation = navigation.back() }
-                    Box(Modifier.fillMaxSize())
-                }
-
                 Screen.STATS -> StatisticsScreen(
                     data = state.data,
                     onOpenDate = { date ->
@@ -504,12 +498,11 @@ private fun MainBottomNavigation(selectedTab: MainTab, onSelect: (MainTab) -> Un
                         imageVector = when (tab) {
                             MainTab.HOME -> Icons.Rounded.Home
                             MainTab.PLAN -> Icons.Rounded.CalendarMonth
-                            MainTab.START -> Icons.Rounded.PlayCircleFilled
                             MainTab.STATS -> Icons.Rounded.BarChart
                             MainTab.LIBRARY -> Icons.Rounded.FitnessCenter
                         },
                         contentDescription = null,
-                        modifier = Modifier.size(if (tab == MainTab.START) 30.dp else 24.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                 },
                 label = { Text(tab.label) },

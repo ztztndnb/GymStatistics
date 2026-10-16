@@ -16,14 +16,14 @@ class AppNavigationTest {
     }
 
     @Test
-    fun allFiveTabsOpenTheirPageAndRemainSelectable() {
+    fun allFourTabsOpenTheirPageAndRemainSelectable() {
         val cases = listOf(
             MainTab.HOME to Screen.MAIN,
             MainTab.PLAN to Screen.PLAN,
-            MainTab.START to Screen.START,
             MainTab.STATS to Screen.STATS,
             MainTab.LIBRARY to Screen.HISTORY,
         )
+        assertEquals(cases.map { it.first }, MainTab.entries.toList())
         cases.forEach { (tab, expectedScreen) ->
             val state = AppNavigationState().selectTab(tab)
             assertEquals(tab.name, expectedScreen, state.screen)
@@ -86,7 +86,7 @@ class AppNavigationTest {
 
     @Test
     fun backFromAnotherRootTabReturnsHome() {
-        listOf(MainTab.PLAN, MainTab.START, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
+        listOf(MainTab.PLAN, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
             assertEquals(AppNavigationState(), AppNavigationState().selectTab(tab).back())
         }
     }
