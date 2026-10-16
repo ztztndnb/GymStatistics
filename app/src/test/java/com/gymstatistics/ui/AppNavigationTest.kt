@@ -8,6 +8,26 @@ import org.junit.Test
 
 class AppNavigationTest {
     @Test
+    fun statisticsOpenedFromAnActionReturnsToThatAction() {
+        val statistics = AppNavigationState().selectHistoryAction("卧推").open(Screen.STATS)
+        assertEquals(MainTab.STATS, statistics.selectedTab)
+        assertTrue(statistics.showBottomNavigation)
+        val detail = statistics.back()
+        assertEquals(Screen.HISTORY, detail.screen)
+        assertEquals("卧推", detail.historyAction)
+        assertFalse(detail.showBottomNavigation)
+        assertNull(detail.back().historyAction)
+    }
+
+    @Test
+    fun selectingAnotherTabClearsTheStatisticsReturnDestination() {
+        val statistics = AppNavigationState().selectHistoryAction("卧推").open(Screen.STATS)
+        assertEquals(AppNavigationState(), statistics.selectTab(MainTab.STATS).back())
+        val second = statistics.back().selectHistoryAction("深蹲").open(Screen.STATS)
+        assertEquals("深蹲", second.back().historyAction)
+    }
+
+    @Test
     fun launchOpensHomeWithTheBottomNavigation() {
         val state = AppNavigationState()
         assertEquals(Screen.MAIN, state.screen)

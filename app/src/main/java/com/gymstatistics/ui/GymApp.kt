@@ -421,6 +421,7 @@ fun GymApp(viewModel: GymViewModel) {
 
                 Screen.STATS -> StatisticsScreen(
                     data = state.data,
+                    requestedAction = navigation.historyAction,
                     onOpenDate = { date ->
                         weekNavigation = weekNavigation.select(date)
                         workoutMode = WorkoutMode.MANUAL
@@ -433,6 +434,7 @@ fun GymApp(viewModel: GymViewModel) {
                     data = state.data,
                     selectedName = navigation.historyAction,
                     onSelectedNameChange = { navigation = navigation.selectHistoryAction(it) },
+                    onOpenStatistics = { name -> navigation = navigation.selectHistoryAction(name).open(Screen.STATS) },
                     onSetFatigueSuppressed = { name, sup -> viewModel.setFatigueSuppressed(name, sup) },
                     onEditMuscles = { name, muscles -> viewModel.updateMusclesForAction(name, muscles) },
                     onBack = { navigation = navigation.back() },
@@ -2078,6 +2080,7 @@ private fun HistoryScreen(
     data: WorkoutData,
     selectedName: String?,
     onSelectedNameChange: (String?) -> Unit,
+    onOpenStatistics: (String) -> Unit,
     onSetFatigueSuppressed: (String, Boolean) -> Unit,
     onEditMuscles: (String, List<MuscleSelection>) -> Unit,
     onBack: () -> Unit,
@@ -2247,12 +2250,13 @@ private fun HistoryScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    // Charts split by unit (one chart per unit).
-                    buildSeriesByData(act).forEach { s ->
-                        TrendChart("数据趋势(${s.label})", listOf(s), yAxisLabel = s.label)
-                    }
-                    buildSeriesByTotalCount(act).forEach { s ->
-                        TrendChart("总个数趋势(${s.label})", listOf(s), yAxisLabel = "个")
+                    OutlinedButton(
+                        onClick = { onOpenStatistics(act.name) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    ) {
+                        Icon(Icons.Rounded.BarChart, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("查看该动作统计")
                     }
                     Spacer(Modifier.height(24.dp))
                 }

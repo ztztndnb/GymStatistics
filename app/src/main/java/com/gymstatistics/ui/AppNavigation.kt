@@ -30,6 +30,7 @@ internal data class AppNavigationState(
         copy(screen = Screen.HISTORY, historyAction = name)
 
     fun back(): AppNavigationState = when {
+        screen == Screen.STATS && historyAction != null -> copy(screen = Screen.HISTORY)
         screen == Screen.HISTORY && historyAction != null -> copy(historyAction = null)
         screen == Screen.SYNC -> copy(screen = Screen.SETTINGS)
         else -> AppNavigationState()

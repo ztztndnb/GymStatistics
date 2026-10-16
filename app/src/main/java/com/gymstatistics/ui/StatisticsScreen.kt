@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +50,12 @@ import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun StatisticsScreen(data: WorkoutData, onOpenDate: (LocalDate) -> Unit, onBack: () -> Unit) {
+internal fun StatisticsScreen(
+    data: WorkoutData,
+    onOpenDate: (LocalDate) -> Unit,
+    onBack: () -> Unit,
+    requestedAction: String? = null,
+) {
     BackHandler(onBack = onBack)
     val today by produceState(LocalDate.now()) {
         while (true) {
@@ -58,8 +64,13 @@ internal fun StatisticsScreen(data: WorkoutData, onOpenDate: (LocalDate) -> Unit
         }
     }
     val statistics = remember(data.sessions, today) { WorkoutStatistics(data.sessions, today) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(requestedAction) {
+        if (requestedAction != null) listState.scrollToItem(4)
+    }
     Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -68,7 +79,7 @@ internal fun StatisticsScreen(data: WorkoutData, onOpenDate: (LocalDate) -> Unit
             item(key = "activity") { TrainingActivityCard(statistics, onOpenDate) }
             item(key = "muscles") { MuscleDistributionCard(statistics) }
             item(key = "plan") { WeeklyPlanCard(statistics, data.trainingPlan) }
-            item(key = "progress") { ExerciseProgressCard(statistics) }
+            item(key = "progress") { ExerciseProgressCard(statistics, requestedAction) }
             item(key = "recent") { RecentTrainingCard(statistics.days.take(6), onOpenDate) }
             item(key = "rules") {
                 Text(
@@ -345,15 +356,17 @@ private fun WeeklyPlanCard(statistics: WorkoutStatistics, plan: TrainingPlan?) {
 }
 
 @Composable
-private fun ExerciseProgressCard(statistics: WorkoutStatistics) {
+private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction: String?) {
     val actions = remember(statistics) { statistics.days.flatMap { it.exercises }.map { it.name }.distinct().sorted() }
-    var chosenAction by rememberSaveable { mutableStateOf<String?>(null) }
-    var chosenUnit by rememberSaveable { mutableStateOf<String?>(null) }
+    var chosenAction by rememberSaveable(requestedAction) { mutableStateOf(requestedAction) }
+    var chosenUnit by rememberSaveable(requestedAction) { mutableStateOf<String?>(null) }
     var metricIndex by rememberSaveable { mutableIntStateOf(0) }
     var rangeIndex by rememberSaveable { mutableIntStateOf(1) }
     var showPicker by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    val action = chosenAction?.takeIf { it in actions } ?: actions.firstOrNull()
+    // A deep-linked action may have only future/invalid records. Keep its name
+    // and show an empty chart instead of silently displaying another action.
+    val action = chosenAction?.takeIf { it in actions } ?: requestedAction ?: actions.firstOrNull()
     val units = action?.let { statistics.units(it) }.orEmpty()
     val unit = chosenUnit?.takeIf { it in units } ?: units.firstOrNull().orEmpty()
     val metric = ProgressMetric.entries[metricIndex]
