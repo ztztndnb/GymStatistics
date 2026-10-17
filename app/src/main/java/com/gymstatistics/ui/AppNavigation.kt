@@ -1,6 +1,6 @@
 package com.gymstatistics.ui
 
-internal enum class Screen { MAIN, PLAN, STATS, HISTORY, SETTINGS, SYNC, FOOD }
+internal enum class Screen { MAIN, PLAN, STATS, HISTORY, SETTINGS, SYNC, FOOD, NUTRITION }
 
 internal enum class MainTab(val label: String, val screen: Screen) {
     HOME("首页", Screen.MAIN),

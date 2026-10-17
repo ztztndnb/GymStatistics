@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.RestaurantMenu
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.BarChart
@@ -119,6 +120,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -233,10 +235,15 @@ fun GymApp(viewModel: GymViewModel) {
                                     Text(
                                         "GymStatistics",
                                         fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 },
                                 actions = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = { navigation = navigation.open(Screen.NUTRITION) }) {
+                                            Icon(Icons.Rounded.RestaurantMenu, contentDescription = "营养库")
+                                        }
                                         IconButton(
                                             onClick = { navigation = navigation.open(Screen.FOOD) },
                                             modifier = Modifier.semantics { contentDescription = "AI食物分析相机" },
@@ -460,6 +467,7 @@ fun GymApp(viewModel: GymViewModel) {
                 Screen.SYNC -> SyncPage(viewModel = viewModel, onBack = { navigation = navigation.back() })
 
                 Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { navigation = navigation.back() })
+                Screen.NUTRITION -> NutritionLibraryScreen(onBack = { navigation = navigation.back() })
             }
         }
     }

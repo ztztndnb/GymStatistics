@@ -117,6 +117,12 @@ class StatisticsWebViewTest {
         ))))
         // A shorter viewport keeps the third lazy item off-screen initially.
         instrumentation.runOnMainSync { activity.setContent { MaterialTheme { Box(Modifier.height(600.dp)) { StatisticsScreen(data, {}, {}) } } } }
+        // Replacing the host content is asynchronous. Wait for its new semantics
+        // owner before requesting a scroll (and before failure-tree diagnostics).
+        compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodes(hasScrollToIndexAction()).fetchSemanticsNodes().size == 1
+        }
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription("肌群训练分布图"))
         compose.onNodeWithContentDescription("肌群训练分布图").assertIsDisplayed()
         try {

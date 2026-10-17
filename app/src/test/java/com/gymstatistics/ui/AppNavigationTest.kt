@@ -66,7 +66,7 @@ class AppNavigationTest {
 
     @Test
     fun cameraAndSettingsHideTheBarAndReturnHome() {
-        listOf(Screen.FOOD, Screen.SETTINGS).forEach { page ->
+        listOf(Screen.FOOD, Screen.SETTINGS, Screen.NUTRITION).forEach { page ->
             val state = AppNavigationState().open(page)
             assertFalse(state.showBottomNavigation)
             assertEquals(MainTab.HOME, state.selectedTab)
