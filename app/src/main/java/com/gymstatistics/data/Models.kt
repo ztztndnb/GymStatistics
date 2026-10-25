@@ -43,6 +43,7 @@ data class WorkoutData(
     /** Actions whose fatigue warning has been turned off. */
     val suppressedFatigue: Set<String> = emptySet(),
     val trainingPlan: TrainingPlan? = null,
+    val bodyData: BodyData? = null,
 )
 
 /** Payload served by the embedded sync server for the PC dashboard. */
@@ -51,6 +52,7 @@ data class SyncPayload(
     val exportedAt: String,
     val sessions: List<SessionRecord>,
     val trainingPlan: TrainingPlan? = null,
+    val bodyData: BodyData? = null,
 )
 
 /** How an import is scoped. */
@@ -75,6 +77,7 @@ data class ImportRequest(
     val overwriteDuplicates: Boolean = false,
     val sessions: List<SessionRecord> = emptyList(),
     val trainingPlan: TrainingPlan? = null,
+    val bodyData: BodyData? = null,
 )
 
 /** Response of a POST /api/import. */

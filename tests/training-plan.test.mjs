@@ -140,13 +140,13 @@ test("training plan action editor exposes unit choices", () => {
 });
 
 test("LAN sync includes plan data and keeps date imports session-scoped", () => {
-  assert.match(serverSource, /trainingPlan = dataProvider\(\)\.trainingPlan/);
-  assert.match(serverSource, /importHandler\(req\.sessions, mode, req\.overwriteDuplicates, req\.trainingPlan\)/);
+  assert.match(serverSource, /trainingPlan = data\.trainingPlan/);
+  assert.match(serverSource, /importHandler\(req\.sessions, mode, req\.overwriteDuplicates, req\.trainingPlan, req\.bodyData\)/);
   assert.match(viewModelSource, /mode is ImportMode\.ALL && trainingPlan != null/);
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 55/);
-  assert.match(buildSource, /versionName = "1\.3\.7"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.7\.apk/);
+  assert.match(buildSource, /versionCode = 56/);
+  assert.match(buildSource, /versionName = "1\.3\.8"/);
+  assert.match(readmeSource, /GymStatistics 1\.3\.8\.apk/);
 });

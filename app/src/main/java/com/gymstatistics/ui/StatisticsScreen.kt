@@ -80,6 +80,7 @@ internal fun StatisticsScreen(
             item(key = "muscles") { MuscleDistributionCard(statistics) }
             item(key = "plan") { WeeklyPlanCard(statistics, data.trainingPlan) }
             item(key = "progress") { ExerciseProgressCard(statistics, requestedAction) }
+            item(key = "body") { BodyChangesCard(data.bodyData, today) }
             item(key = "recent") { RecentTrainingCard(statistics.days.take(6), onOpenDate) }
             item(key = "rules") {
                 Text(

@@ -23,16 +23,28 @@ import com.gymstatistics.data.TrainingPlan
 import com.gymstatistics.data.TrainingPlanDay
 import com.gymstatistics.data.WorkoutData
 import com.gymstatistics.data.WorkoutRepository
+import com.gymstatistics.data.BodyData
+import com.gymstatistics.data.BodyMetric
+import com.gymstatistics.data.saveBodyDay
+import com.gymstatistics.data.importBodyData
+import com.gymstatistics.data.rebaseWorkoutChanges
+import com.gymstatistics.data.normalizeWorkoutIds
 import com.gymstatistics.data.completedPlanExerciseIds
 import com.gymstatistics.data.exerciseRecordForPlan
 import com.gymstatistics.data.planDayIndex
 import com.gymstatistics.data.reorderManualExercises
 import com.gymstatistics.server.LanSyncServer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.NetworkInterface
 import java.util.UUID
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 data class UiState(
     val data: WorkoutData = WorkoutData(),
@@ -59,6 +71,14 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     private val aiSettings = AiSettingsRepository(app)
     private val foodAnalyzer = DeepSeekFoodAnalyzer(app)
     private var server: LanSyncServer? = null
+    private var saveTail: Job? = null
+    private var savedData = WorkoutData()
+    private class PendingWrite(
+        val change: (WorkoutData) -> WorkoutData,
+        val optimistic: Boolean,
+        val completed: (Exception?) -> Unit,
+    )
+    private val pendingWrites = mutableListOf<PendingWrite>()
     private var seedDemo = false
     private var autoSync = false
 
@@ -72,6 +92,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 data = demoData()
                 repo.save(data)
             }
+            savedData = data
             uiState = uiState.copy(
                 data = data,
                 loaded = true,
@@ -122,8 +143,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteSession(sessionId: String) {
-        val current = uiState.data
-        persist(current.copy(sessions = current.sessions.filter { it.id != sessionId }))
+        enqueueWrite({ current -> current.copy(sessions = current.sessions.filter { it.id != sessionId }) }, optimistic = true)
     }
 
     /** Add a single action to the day (merge into same-date session). */
@@ -427,14 +447,34 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         persist(current.copy(suppressedFatigue = newSet))
     }
 
+    fun saveBodyRecord(date: String, values: Map<String, Double>, onSaved: (Boolean) -> Unit) =
+        changeBodyData(onSaved) { saveBodyDay(it, date, values) }
+
+    fun saveBodyMetric(metric: BodyMetric, onSaved: (Boolean) -> Unit) =
+        changeBodyData(onSaved) { com.gymstatistics.data.updateBodyMetric(it, metric) }
+
+    fun deleteBodyRecord(date: String, onSaved: (Boolean) -> Unit) =
+        changeBodyData(onSaved) { it.copy(records = it.records.filterNot { record -> record.date == date }) }
+
+    private fun changeBodyData(onSaved: (Boolean) -> Unit, transform: (BodyData) -> BodyData) {
+        if (!uiState.loaded) { onSaved(false); return }
+        enqueueWrite(
+            change = { current -> current.copy(bodyData = transform(current.bodyData ?: BodyData())) },
+            optimistic = false,
+            completed = { onSaved(it == null) },
+        )
+    }
+
     /** Import sessions from an external source (a file or a PC POST), handling duplicates. */
-    fun importSessions(
+    private fun mergeImport(
+        current: WorkoutData,
         incoming: List<SessionRecord>,
         mode: ImportMode,
         overwriteDuplicates: Boolean,
         trainingPlan: TrainingPlan? = null,
-    ): ImportResult {
-        val current = uiState.data
+        bodyData: BodyData? = null,
+    ): Pair<WorkoutData, ImportResult> {
+        val bodyImport = importBodyData(current.bodyData ?: BodyData(), bodyData, mode, overwriteDuplicates)
         val sessions = current.sessions.toMutableList()
         val usedExerciseIds = sessions
             .flatMap { it.exercises }
@@ -472,17 +512,37 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         val newData = current.copy(
             sessions = sessions,
             trainingPlan = if (mode is ImportMode.ALL && trainingPlan != null) trainingPlan else current.trainingPlan,
+            bodyData = if (bodyData == null) current.bodyData else bodyImport.data,
         )
-        persist(newData)
-        uiState = uiState.copy(message = "已导入:新增 $added 条,重复 $duplicates 条(跳过 $skipped/合并 $overwritten)")
-        return ImportResult(added, duplicates, skipped, overwritten)
+        val counts = ImportResult(added + bodyImport.counts.added, duplicates + bodyImport.counts.duplicates, skipped + bodyImport.counts.skipped, overwritten + bodyImport.counts.overwritten)
+        return newData to counts
     }
 
+    /** File UI and HTTP callers wait for the atomic save before reporting success. */
+    suspend fun importBackup(incoming: List<SessionRecord>, mode: ImportMode, overwrite: Boolean, plan: TrainingPlan?, body: BodyData?): ImportResult =
+        withContext(Dispatchers.Main.immediate) {
+            suspendCoroutine { continuation ->
+                var counts = ImportResult()
+                enqueueWrite(change = { current ->
+                    val merged = mergeImport(current, incoming, mode, overwrite, plan, body)
+                    counts = merged.second
+                    merged.first
+                }, optimistic = false, completed = { error ->
+                    if (error == null) {
+                        uiState = uiState.copy(message = "已导入:新增 ${counts.added} 条,重复 ${counts.duplicates} 条(跳过 ${counts.skipped}/合并或覆盖 ${counts.overwritten})")
+                        continuation.resume(counts)
+                    } else continuation.resumeWithException(error)
+                })
+            }
+        }
+
     /** Number of incoming dates that already exist on the phone (drives the duplicate prompt). */
-    fun importPreview(incoming: List<SessionRecord>, mode: ImportMode): Int {
+    fun importPreview(incoming: List<SessionRecord>, mode: ImportMode, bodyData: BodyData? = null): Int {
         val incomingDates = incoming.filter { sessionMatchesMode(it, mode) }.map { it.date }.toSet()
         val existing = uiState.data.sessions.map { it.date }.toSet()
-        return incomingDates.count { it in existing }
+        val bodyDates = bodyData?.records.orEmpty().filter { mode is ImportMode.ALL || it.date == (mode as ImportMode.DATE).date }.map { it.date }.toSet()
+        val existingBody = uiState.data.bodyData?.records.orEmpty().map { it.date }.toSet()
+        return incomingDates.count { it in existing } + bodyDates.count { it in existingBody }
     }
 
     private fun sessionMatchesMode(s: SessionRecord, mode: ImportMode): Boolean =
@@ -496,8 +556,8 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
             if (server == null) {
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        val s = LanSyncServer(getApplication(), SYNC_PORT, { uiState.data }) { incoming, mode, overwrite, trainingPlan ->
-                            importSessions(incoming, mode, overwrite, trainingPlan)
+                        val s = LanSyncServer(getApplication(), SYNC_PORT, { uiState.data }) { incoming, mode, overwrite, trainingPlan, body ->
+                            runBlocking { importBackup(incoming, mode, overwrite, trainingPlan, body) }
                         }
                         s.start(500, false)
                         server = s
@@ -525,8 +585,36 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun persist(newData: WorkoutData) {
-        uiState = uiState.copy(data = newData)
-        viewModelScope.launch { repo.save(newData) }
+        val before = uiState.data
+        val after = normalizeWorkoutIds(newData)
+        enqueueWrite({ current -> rebaseWorkoutChanges(before, after, current) }, optimistic = true)
+    }
+
+    /** Body changes and imports are published only after the write succeeds. */
+    private fun enqueueWrite(change: (WorkoutData) -> WorkoutData, optimistic: Boolean, completed: (Exception?) -> Unit = {}) {
+        pendingWrites.add(PendingWrite(change, optimistic, completed))
+        publishPendingWrites()
+        if (saveTail?.isActive == true) return
+        saveTail = viewModelScope.launch {
+            while (pendingWrites.isNotEmpty()) {
+                val request = pendingWrites.first()
+                val error = try {
+                    val updated = normalizeWorkoutIds(request.change(savedData))
+                    repo.save(updated)
+                    savedData = updated
+                    null
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { e }
+                pendingWrites.removeAt(0)
+                publishPendingWrites()
+                if (error != null) uiState = uiState.copy(message = "保存失败：${error.message ?: "请重试"}")
+                request.completed(error)
+            }
+        }
+    }
+
+    private fun publishPendingWrites() {
+        uiState = uiState.copy(data = pendingWrites.filter { it.optimistic }.fold(savedData) { current, request -> request.change(current) })
     }
 
     private fun demoData(): WorkoutData {

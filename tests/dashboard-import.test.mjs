@@ -98,8 +98,8 @@ test("Android file import decodes UTF-8 bytes and removes an optional BOM", () =
 });
 
 test("workout persistence uses UTF-8 explicitly", () => {
-  assert.match(repositorySource, /file\.readText\(Charsets\.UTF_8\)/);
-  assert.match(repositorySource, /file\.writeText\([\s\S]*, Charsets\.UTF_8\)/);
+  assert.match(repositorySource, /bufferedReader\(Charsets\.UTF_8\)/);
+  assert.match(repositorySource, /toByteArray\(Charsets\.UTF_8\)/);
 });
 
 test("main action list cannot crash on duplicate exercise IDs", () => {
@@ -271,4 +271,27 @@ test("dashboard import detects duplicate dates before sending one request", asyn
   const importRequests = requests.filter((request) => request.url === "api/import");
   assert.equal(importRequests.length, 1);
   assert.equal(JSON.parse(importRequests[0].options.body).overwriteDuplicates, true);
+});
+
+test("dashboard imports body-only backups without dropping definitions or missing duplicate days", async () => {
+  const requests = [];
+  const bodyData = {
+    metrics: [{ id: "custom-neck", name: "颈围", unit: "cm", enabled: false }],
+    records: [{ date: "2026-10-25", values: { "custom-neck": 35 } }],
+  };
+  const { elements, listeners, context } = createDashboard(async (url, options) => {
+    requests.push({ url, options });
+    if (url === "api/workouts") return { ok: true, json: async () => ({ sessions: [], bodyData }) };
+    return { ok: true, json: async () => ({ duplicates: 1, overwritten: 1 }) };
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  let confirmations = 0;
+  context.confirm = () => { confirmations++; return true; };
+  elements.get("importFile").files = [{ name: "body.json", text: async () => JSON.stringify({ sessions: [], bodyData }) }];
+  await listeners.get("importFile:change")({ target: elements.get("importFile") });
+  await listeners.get("importBtn:click")();
+  const submitted = JSON.parse(requests.find((request) => request.url === "api/import").options.body);
+  assert.deepEqual(submitted.bodyData, bodyData);
+  assert.equal(submitted.overwriteDuplicates, true);
+  assert.equal(confirmations, 1);
 });

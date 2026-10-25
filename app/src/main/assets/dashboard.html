@@ -96,6 +96,7 @@
 </div>
 <script>
   let currentSessions = [];
+  let currentBodyRecords = [];
   let pendingImport = null;
 
   const fmtW = (w) => (w == null ? "-" : String(w));
@@ -114,6 +115,7 @@
       const data = await res.json();
       const sessions = (data.sessions || []).slice().sort((a, b) => b.date.localeCompare(a.date));
       currentSessions = sessions;
+      currentBodyRecords = data.bodyData?.records || [];
       document.getElementById("exported").textContent =
         "同步自手机  ·  " + (data.exportedAt || "刚刚") + "  ·  每 5 秒自动刷新";
 
@@ -200,7 +202,7 @@
       .catch(() => {});
   }
 
-  function parseSessions(json) {
+  function parseBundle(json) {
     if (typeof json !== "string" || !json.trim()) throw new Error("文件为空");
     let payload;
     try {
@@ -209,7 +211,11 @@
       throw new Error("JSON 格式无效");
     }
     if (!payload || !Array.isArray(payload.sessions)) throw new Error("文件不是 GymStatistics 导出的数据");
-    return payload.sessions;
+    return payload;
+  }
+
+  function parseSessions(json) {
+    return parseBundle(json).sessions;
   }
 
   function sessionsForMode(sessions, mode, date) {
@@ -247,7 +253,9 @@
         mode: selection.mode,
         date: selection.date,
         overwriteDuplicates,
-        sessions: pendingImport,
+        sessions: pendingImport.sessions,
+        trainingPlan: pendingImport.trainingPlan,
+        bodyData: pendingImport.bodyData,
       }),
     });
     const result = await response.json();
@@ -263,9 +271,10 @@
     const file = event.target.files && event.target.files[0];
     if (!file) return;
     try {
-      const sessions = parseSessions(await file.text());
-      pendingImport = sessions;
-      document.getElementById("importFileInfo").textContent = `${file.name}：${new Set(sessions.map((s) => s.date)).size} 个日期 / ${sessions.length} 条记录`;
+      pendingImport = parseBundle(await file.text());
+      const sessions = pendingImport.sessions;
+      const bodyCount = pendingImport.bodyData?.records?.length || 0;
+      document.getElementById("importFileInfo").textContent = `${file.name}：${sessions.length} 条训练记录 / ${bodyCount} 天身体数据`;
       document.getElementById("importBtn").disabled = false;
       setImportStatus("文件已读取，请选择导入范围后开始导入。");
     } catch (err) {
@@ -285,9 +294,12 @@
     if (!pendingImport) return;
     try {
       const selection = selectedImportMode();
-      const duplicates = duplicateDates(pendingImport, currentSessions, selection.mode, selection.date);
+      const duplicates = [...new Set([
+        ...duplicateDates(pendingImport.sessions, currentSessions, selection.mode, selection.date),
+        ...duplicateDates(pendingImport.bodyData?.records || [], currentBodyRecords, selection.mode, selection.date),
+      ])];
       const overwrite = duplicates.length > 0 && window.confirm(
-        `检测到 ${duplicates.length} 个日期已存在。点击“确定”合并(覆盖)，点击“取消”跳过重复。`,
+        `检测到 ${duplicates.length} 个日期已存在。点击“确定”合并训练记录并覆盖当天身体数据，点击“取消”跳过重复。`,
       );
       setImportStatus("正在导入…");
       await submitImport(overwrite);

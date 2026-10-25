@@ -150,6 +150,8 @@ import com.gymstatistics.data.PlannedExercise
 import com.gymstatistics.data.TrainingPlan
 import com.gymstatistics.data.TrainingPlanDay
 import com.gymstatistics.data.WorkoutData
+import com.gymstatistics.data.BodyData
+import com.gymstatistics.data.validateBodyData
 import com.gymstatistics.data.buildActions
 import com.gymstatistics.data.actionComparator
 import com.gymstatistics.data.buildSeriesByData
@@ -282,6 +284,9 @@ fun GymApp(viewModel: GymViewModel) {
                                     weekNavigation = weekNavigation.pageIfRevision(revision, direction)
                                 },
                             )
+                            BodyDaySummary(state.data.bodyData, selectedDate, state.loaded) {
+                                navigation = navigation.open(Screen.BODY)
+                            }
                             BoxWithConstraints(
                                 modifier = Modifier
                                     .weight(1f)
@@ -468,6 +473,7 @@ fun GymApp(viewModel: GymViewModel) {
 
                 Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { navigation = navigation.back() })
                 Screen.NUTRITION -> NutritionLibraryScreen(onBack = { navigation = navigation.back() })
+                Screen.BODY -> BodyMeasurementsScreen(viewModel, selectedDate, onBack = { navigation = navigation.back() })
             }
         }
     }
@@ -1518,6 +1524,23 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
     var importMode by remember { mutableStateOf<ImportMode>(ImportMode.ALL) }
     var importDate by remember { mutableStateOf(LocalDate.now().toString()) }
     var showDupDialog by remember { mutableStateOf(false) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    val importScope = rememberCoroutineScope()
+    fun startImport(overwrite: Boolean) {
+        val bundle = pendingImport ?: return
+        val mode = if (importMode is ImportMode.ALL) ImportMode.ALL else ImportMode.DATE(importDate)
+        importing = true
+        importError = null
+        importScope.launch {
+            try {
+                viewModel.importBackup(bundle.sessions, mode, overwrite, if (mode is ImportMode.ALL) bundle.trainingPlan else null, bundle.bodyData)
+                showImportDialog = false; showDupDialog = false; pendingImport = null
+            } catch (e: Exception) {
+                importError = e.message ?: "导入失败，请检查文件后重试"
+            } finally { importing = false }
+        }
+    }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val json = try {
@@ -1525,13 +1548,15 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
                     input.readBytes().toString(Charsets.UTF_8).removePrefix("\uFEFF")
                 } ?: ""
             } catch (e: Exception) { "" }
-            val parsed = parseImportData(json)
-            if (parsed.sessions.isNotEmpty() || parsed.trainingPlan != null) {
+            try {
+                val parsed = parseImportData(json)
+                require(parsed.sessions.isNotEmpty() || parsed.trainingPlan != null || parsed.bodyData != null) { "文件中没有可导入的数据" }
                 pendingImport = parsed
                 importMode = ImportMode.ALL
                 importDate = LocalDate.now().toString()
+                importError = null
                 showImportDialog = true
-            }
+            } catch (e: Exception) { importError = e.message ?: "无法读取导入文件" }
         }
     }
 
@@ -1604,50 +1629,40 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
             OutlinedButton(onClick = { filePicker.launch(arrayOf("application/json", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text("从文件导入数据")
             }
+            importError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 
     if (showImportDialog) {
         ImportDialog(
             sessions = pendingImport?.sessions ?: emptyList(),
+            bodyData = pendingImport?.bodyData,
+            error = importError,
+            busy = importing,
             mode = importMode,
             onModeChange = { importMode = it },
             date = importDate,
             onDateChange = { importDate = it },
-            onDismiss = { showImportDialog = false; pendingImport = null },
+            onDismiss = { if (!importing) { showImportDialog = false; pendingImport = null } },
             onImport = {
-                val dup = viewModel.importPreview(pendingImport?.sessions ?: emptyList(), importMode)
+                val mode = if (importMode is ImportMode.ALL) ImportMode.ALL else ImportMode.DATE(importDate)
+                val dup = viewModel.importPreview(pendingImport?.sessions ?: emptyList(), mode, pendingImport?.bodyData)
                 if (dup > 0) { showImportDialog = false; showDupDialog = true }
-                else {
-                    val bundle = pendingImport
-                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, false, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
-                    showImportDialog = false
-                    pendingImport = null
-                }
+                else startImport(false)
             },
         )
     }
 
     if (showDupDialog) {
         AlertDialog(
-            onDismissRequest = { showDupDialog = false; pendingImport = null },
+            onDismissRequest = { if (!importing) { showDupDialog = false; pendingImport = null } },
             title = { Text("检测到重复") },
-            text = { Text("导入内容中有日期已存在数据,如何处理?") },
+            text = { Column { Text("已有日期：训练记录可合并，身体数据可覆盖当天整份记录。也可跳过重复。"); importError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } },
             confirmButton = {
-                TextButton(onClick = {
-                    val bundle = pendingImport
-                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, true, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
-                    showDupDialog = false
-                    pendingImport = null
-                }) { Text("合并(覆盖)") }
+                TextButton(enabled = !importing, onClick = { startImport(true) }) { Text("合并/覆盖") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    val bundle = pendingImport
-                    viewModel.importSessions(bundle?.sessions ?: emptyList(), importMode, false, if (importMode is ImportMode.ALL) bundle?.trainingPlan else null)
-                    showDupDialog = false
-                    pendingImport = null
-                }) { Text("跳过重复") }
+                TextButton(enabled = !importing, onClick = { startImport(false) }) { Text("跳过重复") }
             },
         )
     }
@@ -1656,6 +1671,9 @@ private fun SyncPage(viewModel: GymViewModel, onBack: () -> Unit) {
 @Composable
 private fun ImportDialog(
     sessions: List<SessionRecord>,
+    bodyData: BodyData?,
+    error: String?,
+    busy: Boolean,
     mode: ImportMode,
     onModeChange: (ImportMode) -> Unit,
     date: String,
@@ -1663,19 +1681,20 @@ private fun ImportDialog(
     onDismiss: () -> Unit,
     onImport: () -> Unit,
 ) {
-    val dates = sessions.map { it.date }.distinct()
+    val dates = (sessions.map { it.date } + bodyData?.records.orEmpty().map { it.date }).distinct()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("导入数据") },
         text = {
             Column {
-                Text("文件含 ${dates.size} 个日期 / ${sessions.size} 条记录", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("文件含 ${dates.size} 个日期 / ${sessions.size} 条训练记录 / ${bodyData?.records?.size ?: 0} 天身体数据", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { onModeChange(ImportMode.ALL) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(enabled = !busy, onClick = { onModeChange(ImportMode.ALL) }, modifier = Modifier.weight(1f)) {
                         Text("全部导入", fontWeight = if (mode is ImportMode.ALL) FontWeight.Bold else FontWeight.Normal)
                     }
-                    OutlinedButton(onClick = { onModeChange(ImportMode.DATE(date)) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(enabled = !busy, onClick = { onModeChange(ImportMode.DATE(date)) }, modifier = Modifier.weight(1f)) {
                         Text("按日期导入", fontWeight = if (mode is ImportMode.DATE) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
@@ -1683,6 +1702,7 @@ private fun ImportDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = date,
+                        enabled = !busy,
                         onValueChange = onDateChange,
                         label = { Text("导入日期 (YYYY-MM-DD)") },
                         singleLine = true,
@@ -1692,34 +1712,27 @@ private fun ImportDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(enabled = !busy, onClick = {
                 onModeChange(if (mode is ImportMode.ALL) ImportMode.ALL else ImportMode.DATE(date))
                 onImport()
             }) { Text("开始导入") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("取消") } },
     )
 }
 
 private data class ImportBundle(
     val sessions: List<SessionRecord> = emptyList(),
     val trainingPlan: TrainingPlan? = null,
+    val bodyData: BodyData? = null,
 )
 
 /** Parse an exported JSON (WorkoutData or SyncPayload) into sessions and an optional plan. */
 private fun parseImportData(json: String): ImportBundle {
-    if (json.isBlank()) return ImportBundle()
-    return try {
-        val data = AppJson.json.decodeFromString(WorkoutData.serializer(), json)
-        ImportBundle(data.sessions, data.trainingPlan)
-    } catch (e: Exception) {
-        try {
-            val payload = AppJson.json.decodeFromString(SyncPayload.serializer(), json)
-            ImportBundle(payload.sessions, payload.trainingPlan)
-        } catch (e2: Exception) {
-            ImportBundle()
-        }
-    }
+    require(json.isNotBlank()) { "文件为空或无法读取" }
+    val data = AppJson.json.decodeFromString(WorkoutData.serializer(), json)
+    data.bodyData?.let(::validateBodyData)
+    return ImportBundle(data.sessions, data.trainingPlan, data.bodyData)
 }
 
 // ---------- Action item card / Add flow ----------
