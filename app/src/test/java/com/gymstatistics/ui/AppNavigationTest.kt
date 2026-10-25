@@ -8,6 +8,14 @@ import org.junit.Test
 
 class AppNavigationTest {
     @Test
+    fun bodyRecordsAreASelectableBottomNavigationPage() {
+        val body = AppNavigationState().open(Screen.BODY)
+        assertTrue(body.showBottomNavigation)
+        assertEquals("身体", body.selectedTab.label)
+        assertEquals(AppNavigationState(), body.back())
+    }
+
+    @Test
     fun statisticsOpenedFromAnActionReturnsToThatAction() {
         val statistics = AppNavigationState().selectHistoryAction("卧推").open(Screen.STATS)
         assertEquals(MainTab.STATS, statistics.selectedTab)
@@ -36,10 +44,11 @@ class AppNavigationTest {
     }
 
     @Test
-    fun allFourTabsOpenTheirPageAndRemainSelectable() {
+    fun allFiveTabsOpenTheirPageAndRemainSelectable() {
         val cases = listOf(
             MainTab.HOME to Screen.MAIN,
             MainTab.PLAN to Screen.PLAN,
+            MainTab.BODY to Screen.BODY,
             MainTab.STATS to Screen.STATS,
             MainTab.LIBRARY to Screen.HISTORY,
         )
@@ -106,7 +115,7 @@ class AppNavigationTest {
 
     @Test
     fun backFromAnotherRootTabReturnsHome() {
-        listOf(MainTab.PLAN, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
+        listOf(MainTab.PLAN, MainTab.BODY, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
             assertEquals(AppNavigationState(), AppNavigationState().selectTab(tab).back())
         }
     }

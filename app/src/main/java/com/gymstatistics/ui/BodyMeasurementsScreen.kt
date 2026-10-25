@@ -32,7 +32,12 @@ import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun BodyMeasurementsScreen(model: GymViewModel, initialDate: LocalDate, onBack: () -> Unit) {
+internal fun BodyMeasurementsScreen(
+    model: GymViewModel,
+    initialDate: LocalDate,
+    onBack: () -> Unit,
+    onBusyChange: (Boolean) -> Unit,
+) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val body = model.uiState.data.bodyData ?: BodyData()
@@ -45,11 +50,11 @@ internal fun BodyMeasurementsScreen(model: GymViewModel, initialDate: LocalDate,
     var confirmDelete by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember(dateText) { mutableStateOf<String?>(null) }
+    fun setSaving(value: Boolean) { busy = value; onBusyChange(value) }
     BackHandler { if (!busy) onBack() }
     Scaffold(
         topBar = { TopAppBar(
             title = { Text("身体数据") },
-            navigationIcon = { IconButton(onClick = onBack, enabled = !busy) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
             actions = { IconButton(onClick = { showMetrics = true }, enabled = !busy) { Icon(Icons.Default.Settings, "管理身体指标") } },
         ) },
         bottomBar = {
@@ -74,10 +79,10 @@ internal fun BodyMeasurementsScreen(model: GymViewModel, initialDate: LocalDate,
                     }
                     if (error == null && values.isEmpty()) error = "请至少填写一项身体数据"
                     if (error == null) {
-                        busy = true
+                        setSaving(true)
                         model.saveBodyRecord(dateText, values) { success ->
-                            busy = false
-                            if (success) onBack() else error = "保存失败，输入已保留，请重试"
+                            setSaving(false)
+                            if (!success) error = "保存失败，输入已保留，请重试"
                         }
                     }
                 },
@@ -136,10 +141,10 @@ internal fun BodyMeasurementsScreen(model: GymViewModel, initialDate: LocalDate,
         onDismissRequest = { if (!busy) confirmDelete = false }, title = { Text("删除当天身体数据？") },
         text = { Text("将删除 $dateText 的所有身体测量值。") },
         confirmButton = { TextButton(enabled = !busy, onClick = {
-            busy = true
+            setSaving(true)
             model.deleteBodyRecord(dateText) { success ->
-                busy = false; confirmDelete = false
-                if (success) onBack() else error = "删除失败，请重试"
+                setSaving(false); confirmDelete = false
+                if (success) { inputs = HashMap(); error = null } else error = "删除失败，请重试"
             }
         }) { Text("确认删除") } },
         dismissButton = { TextButton(enabled = !busy, onClick = { confirmDelete = false }) { Text("取消") } },

@@ -5,6 +5,7 @@ internal enum class Screen { MAIN, PLAN, STATS, HISTORY, SETTINGS, SYNC, FOOD, N
 internal enum class MainTab(val label: String, val screen: Screen) {
     HOME("首页", Screen.MAIN),
     PLAN("计划", Screen.PLAN),
+    BODY("身体", Screen.BODY),
     STATS("统计", Screen.STATS),
     LIBRARY("动作库", Screen.HISTORY),
 }

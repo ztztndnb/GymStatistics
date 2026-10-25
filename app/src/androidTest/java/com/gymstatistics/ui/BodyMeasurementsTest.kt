@@ -21,6 +21,8 @@ import java.net.URL
 import java.io.File
 import java.nio.file.Files
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
+import android.os.Looper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
@@ -63,6 +65,68 @@ class BodyMeasurementsTest {
         if (::directory.isInitialized) check(directory.deleteRecursively())
     }
 
+    @Test fun bodyTabRecordsTodayAndStaysSelectedAfterSaving() {
+        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText(LocalDate.now().toString()).assertIsDisplayed()
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
+        Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("保存身体数据").performClick()
+        awaitWrites()
+        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+        val restored = runBlocking { WorkoutRepository(fixtureApp).load() }
+        Assert.assertEquals(LocalDate.now().toString(), restored.bodyData!!.records.single().date)
+        Assert.assertEquals(65.5, restored.bodyData!!.records.single().values["weight"]!!, 0.0)
+        compose.onNodeWithText("首页").performClick()
+        compose.onNodeWithText("编辑身体数据").assertIsDisplayed()
+    }
+
+    @Test fun homeShortcutUsesTheSelectedTrainingDate() {
+        val today = LocalDate.now()
+        val target = if (today.dayOfWeek == java.time.DayOfWeek.MONDAY) today.plusDays(1) else today.minusDays(1)
+        compose.onNodeWithText(target.dayOfMonth.toString()).performClick()
+        compose.onNodeWithText("记录身体数据").performClick()
+        compose.onNodeWithText(target.toString()).assertIsDisplayed()
+        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithText("首页").performClick()
+        compose.onNodeWithText("${target.year}年${target.monthValue}月${target.dayOfMonth}日").assertIsDisplayed()
+        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText(today.toString()).assertIsDisplayed()
+    }
+
+    @Test fun openingBodyTabDuringInitialLoadKeepsExistingMeasurements() {
+        val today = LocalDate.now().toString()
+        val saved = WorkoutData(bodyData = saveBodyDay(BodyData(), today, mapOf("weight" to 65.5, "waist" to 80.0)))
+        File(directory, "workouts.json").writeText(AppJson.json.encodeToString(WorkoutData.serializer(), saved), Charsets.UTF_8)
+        val releaseLoad = CountDownLatch(1)
+        val context = instrumentation.targetContext.applicationContext
+        fixtureApp = object : Application() {
+            init { attachBaseContext(context) }
+            override fun getFilesDir(): File {
+                if (Looper.myLooper() != Looper.getMainLooper()) releaseLoad.await()
+                return directory
+            }
+        }
+        try {
+            instrumentation.runOnMainSync {
+                store.clear()
+                store = ViewModelStore()
+                model = ViewModelProvider(store, ViewModelProvider.AndroidViewModelFactory(fixtureApp))[GymViewModel::class.java]
+                activity.setContent { GymApp(model) }
+            }
+            compose.onNodeWithText("身体").performClick()
+            compose.waitForIdle()
+            Assert.assertFalse(model.uiState.loaded)
+        } finally { releaseLoad.countDown() }
+        compose.waitUntil(10_000) { model.uiState.loaded }
+        compose.onNodeWithText("腰围 (cm)").assertTextContains("80")
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("66")
+        save()
+        val restored = runBlocking { WorkoutRepository(fixtureApp).load() }
+        Assert.assertEquals(mapOf("weight" to 66.0, "waist" to 80.0), restored.bodyData!!.records.single().values)
+    }
+
     @Test fun saveEditAndDeleteUseSelectedDayAndSurviveRepositoryReload() {
         compose.onNodeWithText("记录身体数据").performClick()
         compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
@@ -81,6 +145,8 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("删除当天记录").performClick()
         compose.onNodeWithText("确认删除").performClick()
         compose.waitUntil(10_000) { model.uiState.data.bodyData?.records?.isEmpty() == true }
+        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("记录身体数据").assertIsDisplayed()
     }
 
@@ -171,6 +237,7 @@ class BodyMeasurementsTest {
         try {
             compose.onNodeWithText("保存身体数据").performClick()
             compose.onNodeWithText("保存中…").assertIsDisplayed()
+            compose.onNodeWithText("首页").assertIsNotEnabled()
             Espresso.pressBack()
             compose.onNodeWithText("保存中…").assertIsDisplayed()
             Assert.assertFalse(activity.isFinishing)
@@ -216,6 +283,9 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("前一天").performClick()
         compose.onNodeWithText("体重 (kg)").performTextReplacement("66.0")
         compose.onNodeWithText("保存身体数据").performClick()
+        awaitWrites()
+        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithText("首页").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("记录身体数据").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("这一天尚未记录").assertIsDisplayed()
         val record = runBlocking { WorkoutRepository(fixtureApp).load() }.bodyData!!.records.single()
@@ -278,11 +348,20 @@ class BodyMeasurementsTest {
         compose.waitForIdle()
         compose.onNodeWithText("保存身体数据").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithText("保存身体数据").performClick()
+        awaitWrites()
+        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithText("首页").performClick()
         try {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("编辑身体数据").fetchSemanticsNodes().isNotEmpty() }
         } catch (error: ComposeTimeoutException) {
             throw AssertionError("保存后页面未返回：body=${model.uiState.data.bodyData}; message=${model.uiState.message}; jobs=${model.viewModelScope.coroutineContext[Job]?.children?.map { it.isActive }?.toList()}\n" + compose.onRoot(useUnmergedTree = true).printToString(), error)
         }
+        compose.waitForIdle()
+    }
+
+    private fun awaitWrites() {
+        runBlocking { model.viewModelScope.coroutineContext[Job]?.children?.toList().orEmpty().joinAll() }
         compose.waitForIdle()
     }
 }

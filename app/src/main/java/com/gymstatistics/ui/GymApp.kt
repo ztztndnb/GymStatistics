@@ -67,6 +67,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.MonitorWeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -185,6 +186,9 @@ fun GymApp(viewModel: GymViewModel) {
     val state = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
     var navigation by remember { mutableStateOf(AppNavigationState()) }
+    var bodyEntryDate by remember { mutableStateOf(LocalDate.now()) }
+    var bodyEntryKey by remember { mutableStateOf(0) }
+    var bodySaving by remember { mutableStateOf(false) }
     val screen = navigation.screen
     var weekNavigation by remember { mutableStateOf(WeekNavigation(LocalDate.now())) }
     val selectedDate = weekNavigation.selectedDate
@@ -208,7 +212,14 @@ fun GymApp(viewModel: GymViewModel) {
             if (navigation.showBottomNavigation) {
                 MainBottomNavigation(
                     selectedTab = navigation.selectedTab,
-                    onSelect = { navigation = navigation.selectTab(it) },
+                    enabled = !bodySaving,
+                    onSelect = {
+                        if (it == MainTab.BODY && navigation.screen != Screen.BODY) {
+                            bodyEntryDate = LocalDate.now()
+                            bodyEntryKey++
+                        }
+                        navigation = navigation.selectTab(it)
+                    },
                 )
             }
         },
@@ -285,7 +296,9 @@ fun GymApp(viewModel: GymViewModel) {
                                 },
                             )
                             BodyDaySummary(state.data.bodyData, selectedDate, state.loaded) {
-                                navigation = navigation.open(Screen.BODY)
+                                bodyEntryDate = selectedDate
+                                bodyEntryKey++
+                                navigation = navigation.selectTab(MainTab.BODY)
                             }
                             BoxWithConstraints(
                                 modifier = Modifier
@@ -473,7 +486,21 @@ fun GymApp(viewModel: GymViewModel) {
 
                 Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { navigation = navigation.back() })
                 Screen.NUTRITION -> NutritionLibraryScreen(onBack = { navigation = navigation.back() })
-                Screen.BODY -> BodyMeasurementsScreen(viewModel, selectedDate, onBack = { navigation = navigation.back() })
+                Screen.BODY -> {
+                    if (state.loaded) {
+                        key(bodyEntryKey) { BodyMeasurementsScreen(
+                            model = viewModel,
+                            initialDate = bodyEntryDate,
+                            onBack = { navigation = navigation.back() },
+                            onBusyChange = { bodySaving = it },
+                        ) }
+                    } else {
+                        BackHandler { navigation = navigation.back() }
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("正在读取身体数据…")
+                        }
+                    }
+                }
             }
         }
     }
@@ -503,17 +530,19 @@ fun GymApp(viewModel: GymViewModel) {
 }
 
 @Composable
-private fun MainBottomNavigation(selectedTab: MainTab, onSelect: (MainTab) -> Unit) {
+private fun MainBottomNavigation(selectedTab: MainTab, enabled: Boolean, onSelect: (MainTab) -> Unit) {
     NavigationBar {
         MainTab.entries.forEach { tab ->
             NavigationBarItem(
                 selected = selectedTab == tab,
+                enabled = enabled,
                 onClick = { onSelect(tab) },
                 icon = {
                     Icon(
                         imageVector = when (tab) {
                             MainTab.HOME -> Icons.Rounded.Home
                             MainTab.PLAN -> Icons.Rounded.CalendarMonth
+                            MainTab.BODY -> Icons.Rounded.MonitorWeight
                             MainTab.STATS -> Icons.Rounded.BarChart
                             MainTab.LIBRARY -> Icons.Rounded.FitnessCenter
                         },
