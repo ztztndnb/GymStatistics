@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GymStatistics · 局域网查看</title>
+<title>GymStatistics（局域网查看）</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -92,7 +92,7 @@
   </div>
 
   <div id="content"></div>
-  <div class="footer">数据来源:你的手机 · GymStatistics 局域网同步</div>
+  <div class="footer">数据来源:你的手机，GymStatistics 局域网同步</div>
 </div>
 <script>
   let currentSessions = [];
@@ -117,7 +117,7 @@
       currentSessions = sessions;
       currentBodyRecords = data.bodyData?.records || [];
       document.getElementById("exported").textContent =
-        "同步自手机  ·  " + (data.exportedAt || "刚刚") + "  ·  每 5 秒自动刷新";
+        "同步自手机，" + (data.exportedAt || "刚刚") + "，每 5 秒自动刷新";
 
       // stats
       let nEx = 0, nSets = 0, nCount = 0;
@@ -165,7 +165,7 @@
           if (e.count != null) line.push((e.sets == null || e.sets <= 1) ? `${e.count}个` : `${e.count} × ${e.sets}组`);
           const sd = document.createElement("div");
           sd.className = "sets";
-          sd.textContent = line.join(" · ");
+          sd.textContent = line.join("，");
           box.appendChild(sd);
           sec.appendChild(box);
         });

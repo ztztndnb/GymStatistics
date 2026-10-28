@@ -991,7 +991,7 @@ private fun FoodAnalysisReport(
                                     Column(Modifier.weight(1f)) {
                                         Text(item.name, style = MaterialTheme.typography.titleMedium)
                                         Text(
-                                            "${formatNumber(item.weightG)} g · ${formatNumber(item.nutritionPer100g.energyKcal)} kcal/100g",
+                                            "${formatNumber(item.weightG)} g，${formatNumber(item.nutritionPer100g.energyKcal)} kcal/100g",
                                             color = MaterialTheme.colorScheme.outline,
                                             fontSize = 12.sp,
                                         )
@@ -1178,7 +1178,7 @@ private fun FoodAnalysisEditor(
 private fun FoodItemEditor(item: FoodAnalysisItem, onChange: (FoodAnalysisItem) -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(item.name, style = MaterialTheme.typography.titleMedium)
-        Text("来源：${sourceLabel(item.nutritionSource)} · 置信度：${confidenceLabel(item.confidence)}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+        Text("来源：${sourceLabel(item.nutritionSource)}，置信度：${confidenceLabel(item.confidence)}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
         FoodNutritionEditorSection(item, onChange)
     }
 }
@@ -1253,8 +1253,8 @@ private fun FoodAnalysisHistory(
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(record.foodName, style = MaterialTheme.typography.titleMedium)
-                        Text("${foodTypeLabel(record.imageType)} · ${record.createdAt.replace('T', ' ').take(19)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-                        Text("${formatNumber(totals.weightG)} g · ${formatNumber(totals.nutrition.energyKcal)} kcal", fontSize = 13.sp)
+                        Text("${foodTypeLabel(record.imageType)}（${record.createdAt.replace('T', ' ').take(19)}）", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                        Text("${formatNumber(totals.weightG)} g，${formatNumber(totals.nutrition.energyKcal)} kcal", fontSize = 13.sp)
                     }
                     IconButton(onClick = { onDelete(record.id) }) {
                         Icon(Icons.Filled.Delete, contentDescription = "删除")

@@ -117,7 +117,7 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
             FilterChip(category == null, { categoryId = null }, label = { Text("全部") })
             catalog.categories.forEach { entry -> FilterChip(categoryId == entry.id, { categoryId = entry.id }, label = { Text(entry.name) }) }
         }
-        Text("官方每份数据 · 更新 ${catalog.sourceUpdated}", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("官方每份数据（更新于 ${catalog.sourceUpdated}）", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (products.isEmpty()) item { Text("没有匹配的餐品", Modifier.padding(16.dp)) }
             items(products, key = { it.id }) { product ->
@@ -129,12 +129,12 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
         Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (totals.itemCount == 0) "尚未选择餐品" else "已选 ${totals.itemCount} 项 · ${nutritionNumber(totals.portions)} 份", style = MaterialTheme.typography.titleSmall)
+                    Text(if (totals.itemCount == 0) "尚未选择餐品" else "已选 ${totals.itemCount} 项，${nutritionNumber(totals.portions)} 份", style = MaterialTheme.typography.titleSmall)
                     Text("≈${nutritionNumber(totals.nutrition.energyKcal, true)} kcal", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 with(totals.nutrition) {
-                    Text("蛋白质 ${nutritionNumber(proteinG)} g · 脂肪 ${nutritionNumber(fatG)} g · 碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall)
-                    Text("${nutritionNumber(energyKj)} kJ · 钠 ${nutritionNumber(sodiumMg)} mg · 钙 ${nutritionNumber(calciumMg)} mg", style = MaterialTheme.typography.bodySmall)
+                    Text("蛋白质 ${nutritionNumber(proteinG)} g，脂肪 ${nutritionNumber(fatG)} g，碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall)
+                    Text("${nutritionNumber(energyKj)} kJ，钠 ${nutritionNumber(sodiumMg)} mg，钙 ${nutritionNumber(calciumMg)} mg", style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(onClick = { showCart = true }, enabled = totals.itemCount > 0, modifier = Modifier.fillMaxWidth()) { Text("查看已选") }
             }
@@ -157,7 +157,7 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
                         Card(shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${product.name} · ${variant.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                                    Text("${product.name}（${variant.name}）", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                                     IconButton(onClick = { change(product.id, variant.id) { 0.0 } }) { Icon(Icons.Rounded.Delete, "移除$label") }
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -195,7 +195,7 @@ private fun NutritionProductCard(product: NutritionProduct, onAdd: (NutritionVar
                     }
                 }
             }
-            with(variant.perServing) { Text("蛋白质 ${nutritionNumber(proteinG)} g · 脂肪 ${nutritionNumber(fatG)} g · 碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall) }
+            with(variant.perServing) { Text("蛋白质 ${nutritionNumber(proteinG)} g，脂肪 ${nutritionNumber(fatG)} g，碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall) }
             val note = variant.note.ifBlank { product.note }
             if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilledTonalButton(onClick = { onAdd(variant) }, modifier = Modifier.fillMaxWidth()) {
@@ -238,7 +238,7 @@ private fun NutritionSourceDialog(catalog: NutritionCatalog, onDismiss: () -> Un
         onDismissRequest = onDismiss, title = { Text("数据来源与说明") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("来源：麦当劳中国官网营养计算器")
-            Text("官方营养数据更新：${catalog.sourceUpdated}\n本地采集日期：$date\n${catalog.products.size} 款餐品 · ${catalog.products.sumOf { it.variants.size }} 种规格")
+            Text("官方营养数据更新：${catalog.sourceUpdated}\n本地采集日期：$date\n${catalog.products.size} 款餐品，${catalog.products.sumOf { it.variants.size }} 种规格")
             Text(catalog.disclaimer)
             Text("全部数值按官方每份口径；kcal 由 kJ ÷ 4.184 换算。未核实的字段不作为克重，不转换为每 100g。当前配餐不写入训练记录或食物分析历史。")
         } },

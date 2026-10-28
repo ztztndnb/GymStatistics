@@ -79,7 +79,7 @@ class BodyMeasurementsTest {
         awaitWrites()
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("身体").assertIsSelected()
-        compose.onNodeWithText("最新 65.5 kg · ${LocalDate.now()}").assertIsDisplayed()
+        compose.onNodeWithText("最新 65.5 kg（${LocalDate.now()}）").assertIsDisplayed()
         val restored = runBlocking { WorkoutRepository(fixtureApp).load() }
         Assert.assertEquals(LocalDate.now().toString(), restored.bodyData!!.records.single().date)
         Assert.assertEquals(65.5, restored.bodyData!!.records.single().values["weight"]!!, 0.0)
@@ -105,9 +105,9 @@ class BodyMeasurementsTest {
         compose.onNodeWithContentDescription("3个测量日，最低65.5，最高68 kg").assertExists()
         compose.onNodeWithText("全部").performClick()
         compose.onNodeWithContentDescription("4个测量日，最低65.5，最高70 kg").assertExists()
-        compose.onNodeWithText("体重 · kg").performClick()
-        compose.onNodeWithText("腰围 · cm").performClick()
-        compose.onNodeWithText("最新 79 cm · $today").assertIsDisplayed()
+        compose.onNodeWithText("体重（kg）").performClick()
+        compose.onNodeWithText("腰围（cm）").performClick()
+        compose.onNodeWithText("最新 79 cm（$today）").assertIsDisplayed()
         compose.onNodeWithContentDescription("2个测量日，最低79，最高80 cm").assertExists()
     }
 
@@ -127,7 +127,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
-        compose.onNodeWithText("最新 65 kg · $today").assertIsDisplayed()
+        compose.onNodeWithText("最新 65 kg（$today）").assertIsDisplayed()
         compose.onNodeWithContentDescription("1个测量日，最低65，最高65 kg").assertExists()
         Assert.assertEquals(mapOf("weight" to 65.0, "waist" to 80.0), runBlocking { WorkoutRepository(fixtureApp).load() }.bodyData!!.records.single().values)
     }
@@ -377,7 +377,7 @@ class BodyMeasurementsTest {
         Assert.assertEquals(LocalDate.now().minusDays(1).toString(), record.date)
         compose.onNodeWithText("统计").performClick()
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("身体变化"))
-        compose.onNodeWithText("最新 66 kg · ${record.date}").assertIsDisplayed()
+        compose.onNodeWithText("最新 66 kg（${record.date}）").assertIsDisplayed()
         compose.onNodeWithContentDescription("1个测量日，最低66，最高66 kg").assertExists()
     }
 

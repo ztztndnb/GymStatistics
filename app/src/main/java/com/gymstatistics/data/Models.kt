@@ -11,7 +11,7 @@ data class MuscleSelection(
 /**
  * One exercise (movement) recorded as a single line:
  *   data(value) + optional unit + count(个数) + sets(组数).
- * Display: "60kg · 10 × 3组" (or "60kg · 10个" when sets <= 1).
+ * Display: "60kg，10 × 3组" (or "60kg，10个" when sets <= 1).
  */
 @Serializable
 data class ExerciseRecord(

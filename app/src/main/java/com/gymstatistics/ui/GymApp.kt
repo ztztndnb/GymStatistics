@@ -687,7 +687,7 @@ private fun PlannedDayContent(
     }
     Column(modifier = modifier) {
         Text(
-            if (day.restDay) "${planWeekdayLabel(day.weekday)} · 休息日" else "${planWeekdayLabel(day.weekday)} · 计划动作",
+            if (day.restDay) "${planWeekdayLabel(day.weekday)}（休息日）" else "${planWeekdayLabel(day.weekday)}（计划动作）",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             color = MaterialTheme.colorScheme.outline,
             fontSize = 13.sp,
@@ -1916,7 +1916,7 @@ private fun ActionItemCard(
     }
 }
 
-/** "60kg · 10 × 3组" (or "60kg · 10个" when 组数<=1). */
+/** "60kg，10 × 3组" (or "60kg，10个" when 组数<=1). */
 private fun exerciseLine(ex: ExerciseRecord): String {
     val data = buildString {
         ex.data?.let { append(fmtNum(it)) }
@@ -1929,7 +1929,7 @@ private fun exerciseLine(ex: ExerciseRecord): String {
     if (count != null) {
         parts += if (sets == null || sets <= 1) "${count}个" else "${count} × ${sets}组"
     }
-    return parts.joinToString(" · ")
+    return parts.joinToString("，")
 }
 
 private fun fmtNum(v: Double): String =
@@ -2225,7 +2225,7 @@ private fun HistoryScreen(
                         .verticalScroll(rememberScrollState()),
                 ) {
                     Text(
-                        "共添加 ${act.addedCount} 次 · 点某条记录可填入添加页",
+                        "共添加 ${act.addedCount} 次；点某条记录可填入添加页",
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 13.sp,
@@ -2459,7 +2459,7 @@ private fun recordLine(r: ActionRecord): String {
     val c = r.count
     val s = r.sets
     if (c != null) parts += if (s == null || s <= 1) "${c}个" else "${c} × ${s}组"
-    return parts.joinToString(" · ")
+    return parts.joinToString("，")
 }
 
 private val chartColors = listOf(

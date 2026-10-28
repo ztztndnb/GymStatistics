@@ -157,7 +157,7 @@ private fun TrainingActivityCard(statistics: WorkoutStatistics, onOpenDate: (Loc
     val positive = remember(cells, metric) { cells.map { if (metric == 0) it.actions else it.sets }.filter { it > 0 }.sorted() }
     val scroll = rememberScrollState()
     LaunchedEffect(scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
-    StatisticsCard("训练活动", "最近一年 · 左右滑动浏览；点击日期查看当天摘要") {
+    StatisticsCard("训练活动", "最近一年；左右滑动浏览；点击日期查看当天摘要") {
         StatisticsOptions(listOf("动作数", "记录组数"), metric) { metric = it }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -202,7 +202,7 @@ private fun TrainingActivityCard(statistics: WorkoutStatistics, onOpenDate: (Loc
         }
         val selected = cells.firstOrNull { it.date.toString() == selectedDate }
         if (selected != null) {
-            Text("${selected.date} · ${selected.actions}条动作 · ${selected.sets}组", style = MaterialTheme.typography.bodyMedium)
+            Text("${selected.date}，${selected.actions}条动作，${selected.sets}组", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { onOpenDate(selected.date) }) { Text("查看当天记录"); Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, Modifier.size(18.dp)) }
         } else Text("已训练 ${cells.count { it.actions > 0 }} 天", style = MaterialTheme.typography.bodyMedium)
     }
@@ -235,7 +235,7 @@ private fun MuscleDistributionCard(statistics: WorkoutStatistics) {
         if (rows.isEmpty()) Text("这段时间还没有已标注肌群的训练记录。", style = MaterialTheme.typography.bodyMedium)
         val selected = rows.firstOrNull { it.muscle.id == selectedMuscle }
         if (selectedMuscle != null) {
-            Text(if (selected == null) "该部位在所选时间内没有训练记录" else "${selected.muscle.name} · ${selected.sets}组", color = MaterialTheme.colorScheme.primary)
+            Text(if (selected == null) "该部位在所选时间内没有训练记录" else "${selected.muscle.name}，${selected.sets}组", color = MaterialTheme.colorScheme.primary)
             TextButton(onClick = { selectedMuscle = null }) { Text("查看全部肌群") }
         }
         val max = rows.maxOfOrNull { it.sets } ?: 1L
@@ -343,7 +343,7 @@ private fun WeeklyPlanCard(statistics: WorkoutStatistics, plan: TrainingPlan?) {
     val combined = (planned.map { it.muscle } + actual.values.map { it.muscle }).distinctBy { it.id }
         .sortedByDescending { muscle -> planned.firstOrNull { it.muscle.id == muscle.id }?.sets ?: 0L }
     val max = maxOf(planned.maxOfOrNull { it.sets } ?: 0L, actual.values.maxOfOrNull { it.sets } ?: 0L, 1L)
-    StatisticsCard("每周计划训练量", "${plan?.name ?: "尚未设置计划"} · 本周累计 / 当前整周计划") {
+    StatisticsCard("每周计划训练量", "${plan?.name ?: "尚未设置计划"}，本周累计 / 当前整周计划") {
         if (combined.isEmpty()) Text("设置训练计划并为动作选择肌群后，即可在这里查看。", style = MaterialTheme.typography.bodyMedium)
         (if (expanded) combined else combined.take(5)).forEach { muscle ->
             val target = planned.firstOrNull { it.muscle.id == muscle.id }?.sets ?: 0L
@@ -351,7 +351,7 @@ private fun WeeklyPlanCard(statistics: WorkoutStatistics, plan: TrainingPlan?) {
             MuscleLoadRow(muscle.name, "$done / $target 组", done.toDouble() / max, plannedFraction = target.toDouble() / max)
         }
         if (combined.size > 5) TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起" else "展开全部") }
-        Text("浅色：整周计划 · 深色：本周累计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("浅色：整周计划，深色：本周累计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("包含手动及计划生成的实际记录。计划是当前预设，不是历史计划快照；此对照不代表计划动作完成率。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -373,7 +373,7 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
     val metric = ProgressMetric.entries[metricIndex]
     val from = when (rangeIndex) { 0 -> statistics.today.minusDays(29); 1 -> statistics.today.minusDays(89); 2 -> statistics.today.minusYears(1).plusDays(1); else -> null }
     val points = remember(statistics, action, unit, metric, from) { if (action == null) emptyList() else statistics.progress(action, unit, metric, from) }
-    val metricUnit = when (metric) { ProgressMetric.VALUE -> unit.ifEmpty { "无单位" }; ProgressMetric.TOTAL_COUNT -> "个"; ProgressMetric.SETS -> "组"; ProgressMetric.COEFFICIENT -> if (unit.isEmpty()) "系数" else "$unit·次" }
+    val metricUnit = when (metric) { ProgressMetric.VALUE -> unit.ifEmpty { "无单位" }; ProgressMetric.TOTAL_COUNT -> "个"; ProgressMetric.SETS -> "组"; ProgressMetric.COEFFICIENT -> if (unit.isEmpty()) "系数" else "$unit×次" }
     StatisticsCard("动作进步", "每个训练日取所选指标最高值，不同单位分开查看。") {
         if (action == null) Text("记录第一个动作后，这里会显示训练曲线。", style = MaterialTheme.typography.bodyMedium) else {
             OutlinedButton(onClick = { query = ""; showPicker = true }, modifier = Modifier.fillMaxWidth()) {
@@ -392,7 +392,7 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
                     Column { Text("范围内最佳", style = MaterialTheme.typography.labelMedium); Text("${statisticsNumber(points.maxOf { it.value })} $metricUnit", style = MaterialTheme.typography.titleMedium) }
                     Column(horizontalAlignment = Alignment.End) { Text("最近一次", style = MaterialTheme.typography.labelMedium); Text("${statisticsNumber(points.last().value)} $metricUnit", style = MaterialTheme.typography.titleMedium) }
                 }
-                Text("${points.size} 个训练日 · 最近记录 ${points.last().date}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${points.size} 个训练日，最近记录 ${points.last().date}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (metric == ProgressMetric.COEFFICIENT) Text("重量系数 = 数值 × 个数 × 组数；自定义单位仍按原单位计算，不等同于最大力量。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -469,7 +469,7 @@ private fun RecentTrainingCard(days: List<TrainingDay>, onOpenDate: (LocalDate) 
             Row(Modifier.fillMaxWidth().clickable { onOpenDate(day.date) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(day.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日")), style = MaterialTheme.typography.titleSmall)
-                    Text("${day.exercises.size}条动作 · ${day.sets}组", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text("${day.exercises.size}条动作，${day.sets}组", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     Text(day.exercises.map { it.name }.distinct().joinToString("、"), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Icon(Icons.AutoMirrored.Rounded.ArrowForward, "查看当天记录", Modifier.size(20.dp))

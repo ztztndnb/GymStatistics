@@ -24,7 +24,7 @@ internal fun bodyNumber(value: Double): String = BigDecimal.valueOf(value).strip
 
 internal fun bodySummary(body: BodyData, record: BodyDayRecord): String = body.metrics.mapNotNull { metric ->
     record.values[metric.id]?.let { "${metric.name} ${bodyNumber(it)} ${metric.unit}" }
-}.joinToString(" · ")
+}.joinToString("，")
 
 @Composable
 internal fun BodyDaySummary(data: BodyData?, date: LocalDate, loaded: Boolean, onOpen: () -> Unit) {
@@ -59,10 +59,10 @@ internal fun BodyChangesCard(body: BodyData?, today: LocalDate) {
             Text("身体变化", style = MaterialTheme.typography.titleMedium)
             Text("按实际测量日期展示；未记录日期不补零。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Box {
-                OutlinedButton(onClick = { menu = true }) { Text(metric?.let { "${it.name} · ${it.unit}" } ?: "选择指标") }
+                OutlinedButton(onClick = { menu = true }) { Text(metric?.let { "${it.name}（${it.unit}）" } ?: "选择指标") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     data.metrics.forEach { option ->
-                        DropdownMenuItem(text = { Text("${option.name} · ${option.unit}" + if (option.enabled) "" else "（已停用）") }, onClick = { metricId = option.id; menu = false })
+                        DropdownMenuItem(text = { Text("${option.name}（${option.unit}）" + if (option.enabled) "" else "（已停用）") }, onClick = { metricId = option.id; menu = false })
                     }
                 }
             }
@@ -73,7 +73,7 @@ internal fun BodyChangesCard(body: BodyData?, today: LocalDate) {
             }
             val latest = all.lastOrNull()
             if (latest != null) {
-                Text("最新 ${bodyNumber(latest.value)} ${metric?.unit.orEmpty()} · ${latest.date}", style = MaterialTheme.typography.titleMedium)
+                Text("最新 ${bodyNumber(latest.value)} ${metric?.unit.orEmpty()}（${latest.date}）", style = MaterialTheme.typography.titleMedium)
                 val previous = all.dropLast(1).lastOrNull()
                 Text(if (previous == null) "尚无上次测量可比较" else {
                     val difference = BigDecimal.valueOf(latest.value).subtract(BigDecimal.valueOf(previous.value))
