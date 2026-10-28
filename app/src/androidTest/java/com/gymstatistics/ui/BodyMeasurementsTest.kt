@@ -65,21 +65,101 @@ class BodyMeasurementsTest {
         if (::directory.isInitialized) check(directory.deleteRecursively())
     }
 
-    @Test fun bodyTabRecordsTodayAndStaysSelectedAfterSaving() {
+    @Test fun bodyTabShowsStatisticsAndOpensASeparateEditor() {
         compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
+        compose.onNodeWithText("身体变化").assertIsDisplayed()
+        compose.onNodeWithTag("body-editor").assertDoesNotExist()
+        compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText(LocalDate.now().toString()).assertIsDisplayed()
+        compose.onNodeWithText("首页").assertDoesNotExist()
         compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
         Espresso.closeSoftKeyboard()
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
-        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("身体").assertIsSelected()
-        compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+        compose.onNodeWithText("最新 65.5 kg · ${LocalDate.now()}").assertIsDisplayed()
         val restored = runBlocking { WorkoutRepository(fixtureApp).load() }
         Assert.assertEquals(LocalDate.now().toString(), restored.bodyData!!.records.single().date)
         Assert.assertEquals(65.5, restored.bodyData!!.records.single().values["weight"]!!, 0.0)
         compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("编辑身体数据").assertIsDisplayed()
+    }
+
+    @Test fun dashboardChartSwitchesMetricAndRangeUsingActualMeasurements() {
+        val today = LocalDate.now()
+        compose.runOnIdle {
+            listOf(
+                today.minusDays(100) to mapOf("weight" to 70.0),
+                today.minusDays(40) to mapOf("weight" to 68.0),
+                today.minusDays(2) to mapOf("weight" to 66.0, "waist" to 80.0),
+                today to mapOf("weight" to 65.5, "waist" to 79.0),
+                today.plusDays(1) to mapOf("weight" to 63.0),
+            ).forEach { (date, values) -> model.saveBodyRecord(date.toString(), values) {} }
+        }
+        awaitWrites()
+        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithContentDescription("2个测量日，最低65.5，最高66 kg").assertExists()
+        compose.onNodeWithText("近90天").performClick()
+        compose.onNodeWithContentDescription("3个测量日，最低65.5，最高68 kg").assertExists()
+        compose.onNodeWithText("全部").performClick()
+        compose.onNodeWithContentDescription("4个测量日，最低65.5，最高70 kg").assertExists()
+        compose.onNodeWithText("体重 · kg").performClick()
+        compose.onNodeWithText("腰围 · cm").performClick()
+        compose.onNodeWithText("最新 79 cm · $today").assertIsDisplayed()
+        compose.onNodeWithContentDescription("2个测量日，最低79，最高80 cm").assertExists()
+    }
+
+    @Test fun historyOpensItsOwnDayAndSavingRefreshesTheChart() {
+        val today = LocalDate.now().toString()
+        compose.runOnIdle { model.saveBodyRecord(today, mapOf("weight" to 66.0, "waist" to 80.0)) {} }
+        awaitWrites()
+        compose.onNodeWithText("身体").performClick()
+        val historyCard = hasText(today) and hasClickAction()
+        compose.onNodeWithTag("body-dashboard").performScrollToNode(historyCard)
+        compose.onNode(historyCard).performClick()
+        compose.onNodeWithText("体重 (kg)").assertTextContains("66")
+        compose.onNodeWithText("腰围 (cm)").assertTextContains("80")
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("65")
+        Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
+        compose.onNodeWithText("保存身体数据").performClick()
+        awaitWrites()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
+        compose.onNodeWithText("最新 65 kg · $today").assertIsDisplayed()
+        compose.onNodeWithContentDescription("1个测量日，最低65，最高65 kg").assertExists()
+        Assert.assertEquals(mapOf("weight" to 65.0, "waist" to 80.0), runBlocking { WorkoutRepository(fixtureApp).load() }.bodyData!!.records.single().values)
+    }
+
+    @Test fun unsavedEditorCanContinueOrDiscardWithoutWriting() {
+        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText("添加记录").performClick()
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
+        Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("返回身体数据").performClick()
+        compose.onNodeWithText("放弃未保存的修改？").assertIsDisplayed()
+        compose.onNodeWithText("继续编辑").performClick()
+        compose.onNodeWithText("体重 (kg)").assertTextContains("65.5")
+        Espresso.pressBack()
+        compose.onNodeWithText("放弃修改").performClick()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
+        Assert.assertNull(runBlocking { WorkoutRepository(fixtureApp).load() }.bodyData)
+    }
+
+    @Test fun changingEditorDateRequiresDiscardingUnsavedInput() {
+        compose.onNodeWithText("记录身体数据").performClick()
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
+        Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
+        compose.onNodeWithText("前一天").performClick()
+        compose.onNodeWithText("继续编辑").performClick()
+        compose.onNodeWithText(LocalDate.now().toString()).assertIsDisplayed()
+        compose.onNodeWithText("前一天").performClick()
+        compose.onNodeWithText("放弃修改").performClick()
+        compose.onNodeWithText(LocalDate.now().minusDays(1).toString()).assertIsDisplayed()
+        compose.onNodeWithText("体重 (kg)").assert(hasText(""))
     }
 
     @Test fun homeShortcutUsesTheSelectedTrainingDate() {
@@ -88,10 +168,13 @@ class BodyMeasurementsTest {
         compose.onNodeWithText(target.dayOfMonth.toString()).performClick()
         compose.onNodeWithText("记录身体数据").performClick()
         compose.onNodeWithText(target.toString()).assertIsDisplayed()
-        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithText("首页").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回身体数据").performClick()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("${target.year}年${target.monthValue}月${target.dayOfMonth}日").assertIsDisplayed()
         compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText(today.toString()).assertIsDisplayed()
     }
 
@@ -120,6 +203,7 @@ class BodyMeasurementsTest {
             Assert.assertFalse(model.uiState.loaded)
         } finally { releaseLoad.countDown() }
         compose.waitUntil(10_000) { model.uiState.loaded }
+        compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText("腰围 (cm)").assertTextContains("80")
         compose.onNodeWithText("体重 (kg)").performTextReplacement("66")
         save()
@@ -145,7 +229,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("删除当天记录").performClick()
         compose.onNodeWithText("确认删除").performClick()
         compose.waitUntil(10_000) { model.uiState.data.bodyData?.records?.isEmpty() == true }
-        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("记录身体数据").assertIsDisplayed()
     }
@@ -237,7 +321,8 @@ class BodyMeasurementsTest {
         try {
             compose.onNodeWithText("保存身体数据").performClick()
             compose.onNodeWithText("保存中…").assertIsDisplayed()
-            compose.onNodeWithText("首页").assertIsNotEnabled()
+            compose.onNodeWithText("首页").assertDoesNotExist()
+            compose.onNodeWithContentDescription("返回身体数据").assertIsNotEnabled()
             Espresso.pressBack()
             compose.onNodeWithText("保存中…").assertIsDisplayed()
             Assert.assertFalse(activity.isFinishing)
@@ -284,7 +369,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("体重 (kg)").performTextReplacement("66.0")
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
-        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("首页").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("记录身体数据").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("这一天尚未记录").assertIsDisplayed()
@@ -349,7 +434,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("保存身体数据").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
-        compose.onNodeWithTag("body-editor").assertIsDisplayed()
+        compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("身体").assertIsSelected()
         compose.onNodeWithText("首页").performClick()
         try {

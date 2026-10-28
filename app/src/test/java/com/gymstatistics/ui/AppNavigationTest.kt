@@ -8,6 +8,17 @@ import org.junit.Test
 
 class AppNavigationTest {
     @Test
+    fun bodyEditorHidesNavigationAndReturnsToTheBodyDashboard() {
+        val editorScreen = Screen.entries.find { it.name == "BODY_EDITOR" }
+        assertTrue("Body recording needs an independent editor destination", editorScreen != null)
+        val editor = AppNavigationState().selectTab(MainTab.BODY).open(editorScreen!!)
+        assertFalse(editor.showBottomNavigation)
+        assertEquals(MainTab.BODY, editor.selectedTab)
+        assertEquals(Screen.BODY, editor.back().screen)
+        assertTrue(editor.back().showBottomNavigation)
+    }
+
+    @Test
     fun bodyRecordsAreASelectableBottomNavigationPage() {
         val body = AppNavigationState().open(Screen.BODY)
         assertTrue(body.showBottomNavigation)

@@ -188,7 +188,6 @@ fun GymApp(viewModel: GymViewModel) {
     var navigation by remember { mutableStateOf(AppNavigationState()) }
     var bodyEntryDate by remember { mutableStateOf(LocalDate.now()) }
     var bodyEntryKey by remember { mutableStateOf(0) }
-    var bodySaving by remember { mutableStateOf(false) }
     val screen = navigation.screen
     var weekNavigation by remember { mutableStateOf(WeekNavigation(LocalDate.now())) }
     val selectedDate = weekNavigation.selectedDate
@@ -212,7 +211,7 @@ fun GymApp(viewModel: GymViewModel) {
             if (navigation.showBottomNavigation) {
                 MainBottomNavigation(
                     selectedTab = navigation.selectedTab,
-                    enabled = !bodySaving,
+                    enabled = true,
                     onSelect = {
                         if (it == MainTab.BODY && navigation.screen != Screen.BODY) {
                             bodyEntryDate = LocalDate.now()
@@ -298,7 +297,7 @@ fun GymApp(viewModel: GymViewModel) {
                             BodyDaySummary(state.data.bodyData, selectedDate, state.loaded) {
                                 bodyEntryDate = selectedDate
                                 bodyEntryKey++
-                                navigation = navigation.selectTab(MainTab.BODY)
+                                navigation = navigation.open(Screen.BODY_EDITOR)
                             }
                             BoxWithConstraints(
                                 modifier = Modifier
@@ -486,13 +485,21 @@ fun GymApp(viewModel: GymViewModel) {
 
                 Screen.FOOD -> FoodAnalysisScreen(viewModel = viewModel, onBack = { navigation = navigation.back() })
                 Screen.NUTRITION -> NutritionLibraryScreen(onBack = { navigation = navigation.back() })
-                Screen.BODY -> {
+                Screen.BODY, Screen.BODY_EDITOR -> {
                     if (state.loaded) {
-                        key(bodyEntryKey) { BodyMeasurementsScreen(
+                        if (scr == Screen.BODY) BodyMeasurementsScreen(
+                            model = viewModel,
+                            onEdit = { date ->
+                                bodyEntryDate = date
+                                bodyEntryKey++
+                                navigation = navigation.open(Screen.BODY_EDITOR)
+                            },
+                            onBack = { navigation = navigation.back() },
+                        ) else key(bodyEntryKey) { BodyMeasurementEditorScreen(
                             model = viewModel,
                             initialDate = bodyEntryDate,
                             onBack = { navigation = navigation.back() },
-                            onBusyChange = { bodySaving = it },
+                            onSaved = { navigation = navigation.back() },
                         ) }
                     } else {
                         BackHandler { navigation = navigation.back() }

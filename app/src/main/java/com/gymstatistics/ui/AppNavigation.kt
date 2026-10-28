@@ -1,6 +1,6 @@
 package com.gymstatistics.ui
 
-internal enum class Screen { MAIN, PLAN, STATS, HISTORY, SETTINGS, SYNC, FOOD, NUTRITION, BODY }
+internal enum class Screen { MAIN, PLAN, STATS, HISTORY, SETTINGS, SYNC, FOOD, NUTRITION, BODY, BODY_EDITOR }
 
 internal enum class MainTab(val label: String, val screen: Screen) {
     HOME("首页", Screen.MAIN),
@@ -16,7 +16,8 @@ internal data class AppNavigationState(
     val historyAction: String? = null,
 ) {
     val selectedTab: MainTab
-        get() = MainTab.entries.firstOrNull { it.screen == screen } ?: MainTab.HOME
+        get() = if (screen == Screen.BODY_EDITOR) MainTab.BODY
+        else MainTab.entries.firstOrNull { it.screen == screen } ?: MainTab.HOME
 
     val showBottomNavigation: Boolean
         get() = MainTab.entries.any { it.screen == screen } &&
@@ -34,6 +35,7 @@ internal data class AppNavigationState(
         screen == Screen.STATS && historyAction != null -> copy(screen = Screen.HISTORY)
         screen == Screen.HISTORY && historyAction != null -> copy(historyAction = null)
         screen == Screen.SYNC -> copy(screen = Screen.SETTINGS)
+        screen == Screen.BODY_EDITOR -> copy(screen = Screen.BODY, historyAction = null)
         else -> AppNavigationState()
     }
 }
