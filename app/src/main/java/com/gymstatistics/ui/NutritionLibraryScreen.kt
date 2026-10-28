@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +45,17 @@ private val portionSaver = Saver<List<NutritionPortion>, String>(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NutritionLibraryScreen(onBack: () -> Unit) {
+    var laoxiangji by rememberSaveable { mutableStateOf(false) }
+    val stateHolder = rememberSaveableStateHolder()
+    stateHolder.SaveableStateProvider(if (laoxiangji) "laoxiangji" else "mcdonalds") {
+        if (laoxiangji) LaoxiangjiNutritionScreen(onBack) { laoxiangji = false }
+        else McDonaldsNutritionScreen(onBack) { laoxiangji = true }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun McDonaldsNutritionScreen(onBack: () -> Unit, onOtherBrand: () -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
     val repository = remember(context) { NutritionCatalogRepository(context) }
@@ -62,7 +74,10 @@ internal fun NutritionLibraryScreen(onBack: () -> Unit) {
             TopAppBar(
                 title = { Text("麦当劳营养库", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") } },
-                actions = { if (result?.isSuccess == true) TextButton(onClick = { showSource = true }) { Text("来源") } },
+                actions = {
+                    TextButton(onClick = onOtherBrand) { Text("老乡鸡") }
+                    if (result?.isSuccess == true) TextButton(onClick = { showSource = true }) { Text("来源") }
+                },
             )
         },
     ) { padding ->

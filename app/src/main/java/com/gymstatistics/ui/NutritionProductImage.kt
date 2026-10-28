@@ -29,11 +29,16 @@ import kotlinx.coroutines.withContext
 
 @Composable
 internal fun NutritionProductImage(product: NutritionProduct, size: Dp = 76.dp) {
+    NutritionProductImage(product.id, product.name, "nutrition/images", size)
+}
+
+@Composable
+internal fun NutritionProductImage(id: String, name: String, directory: String, size: Dp = 76.dp) {
     val context = LocalContext.current
-    val bitmap by produceState<ImageBitmap?>(null, product.id) {
+    val bitmap by produceState<ImageBitmap?>(null, id, directory) {
         value = withContext(Dispatchers.IO) {
             try {
-                val path = "nutrition/images/${product.id}.png"
+                val path = "$directory/$id.png"
                 val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.assets.open(path).use { BitmapFactory.decodeStream(it, null, options) }
                 var sample = 1
@@ -46,8 +51,8 @@ internal fun NutritionProductImage(product: NutritionProduct, size: Dp = 76.dp) 
     }
     Surface(Modifier.size(size), shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Box(contentAlignment = Alignment.Center) {
-            bitmap?.let { Image(it, "${product.name}官方图片", Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-                ?: Icon(Icons.Rounded.Fastfood, "${product.name}图片暂不可用", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            bitmap?.let { Image(it, "${name}官方图片", Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                ?: Icon(Icons.Rounded.Fastfood, "${name}图片暂不可用", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

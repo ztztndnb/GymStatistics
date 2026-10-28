@@ -1,0 +1,90 @@
+{
+  "sourceUrl": "https://www.lxjchina.com.cn/",
+  "collectedAt": "2026-10-28T09:46:11.750Z",
+  "images": [
+    {
+      "productId": "lxj-2026-015",
+      "productName": "西红柿炒鸡蛋",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835427997590900.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-015.png",
+      "sha256": "771f0c990bd281a5a245435aa2cbabf11dc5acbbc5c07d59a14e401d8ad7c105"
+    },
+    {
+      "productId": "lxj-2026-021",
+      "productName": "三杯鸡",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835399503712700.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-021.png",
+      "sha256": "63483d20eb2f4833d78c91ab6d04bf756e9c601e538d31a216a003a18d182483"
+    },
+    {
+      "productId": "lxj-2026-041",
+      "productName": "白菜炖豆腐",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835402970846900.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-041.png",
+      "sha256": "02ac54e2daad186d90f0994ff17563c6a7767543ac80bd6b3c738f0739f802d5"
+    },
+    {
+      "productId": "lxj-2026-044",
+      "productName": "金牌老母鸡汤",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176844395170904800.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-044.png",
+      "sha256": "e0887d15c2a7c9be605a6c3f871a609e8c4a70aac0d824741e9cf3afea1ed61b"
+    },
+    {
+      "productId": "lxj-2026-070",
+      "productName": "香辣鸡杂",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176828513553255400.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-070.png",
+      "sha256": "7c7b49812fdebf3a5076f0ec57d4293ae98ed0fb282e2f74a0064bb923aaeb2e"
+    },
+    {
+      "productId": "lxj-2026-076",
+      "productName": "经典毛豆烧鸡",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176828517157002300.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-076.png",
+      "sha256": "bffbafe7a03572875d092f412468559ff62f62bef1bf560c143c95e7cdeb5d0e"
+    },
+    {
+      "productId": "lxj-2026-092",
+      "productName": "粉蒸肉",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835406877881400.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-092.png",
+      "sha256": "ae7bf29bbc89a993422b85e668911838e0f05fc2cf6bc87c9ea1fe241a02183d"
+    },
+    {
+      "productId": "lxj-2026-094",
+      "productName": "鸡汁辣鱼",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835411088326200.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-094.png",
+      "sha256": "197fe800a808b0c76e127bbb269b8a1e7fd637b1efa9fd2ff70196838f3e8c2d"
+    },
+    {
+      "productId": "lxj-2026-096",
+      "productName": "金汤酸菜鱼",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835414990343800.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-096.png",
+      "sha256": "44dda58436f79b4872e5f9b3f30f2908eec0bd815d4b988157c54b58e529f8dd"
+    },
+    {
+      "productId": "lxj-2026-098",
+      "productName": "梅菜扣肉",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176828526700605200.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-098.png",
+      "sha256": "ec5307420abca162e6fffafaba7095d1a7674bb6ebea9a3cbe2d8dc746b7ad15"
+    },
+    {
+      "productId": "lxj-2026-099",
+      "productName": "农家蒸蛋",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835418497377800.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-099.png",
+      "sha256": "fad2246f3d9f844148fc322a0466ffe971f7b1e03197d76d7c849687ff6049b8"
+    },
+    {
+      "productId": "lxj-2026-104",
+      "productName": "竹笋蒸鸡翅",
+      "sourceUrl": "https://www.lxjchina.com.cn/upload/2026-01/176835435520648600.png",
+      "assetPath": "nutrition/laoxiangji-images/lxj-2026-104.png",
+      "sha256": "39bf0ec707849d7aca7063ece84e3303c9daebc85167f20b187ce471d370dd4a"
+    }
+  ]
+}

@@ -33,6 +33,20 @@ class NutritionLibraryTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var activity: MainActivity
 
+    @Test fun laoxiangjiCanCalculateNutritionByWeight() {
+        compose.onNodeWithContentDescription("营养库").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("老乡鸡").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("老乡鸡").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("搜索菜品").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("搜索菜品").performTextReplacement("豉汁鱼块")
+        compose.onNodeWithText("食用重量（克）").performTextReplacement("150")
+        Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
+        compose.onNodeWithText("加入配餐").performClick()
+        compose.onNodeWithText("181.5 kcal").assertIsDisplayed()
+        compose.onNodeWithText("钠 1390.5 mg").assertIsDisplayed()
+    }
+
     @Before fun openApp() {
         File(instrumentation.targetContext.filesDir, "nutrition-favorites.json").delete()
         activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
