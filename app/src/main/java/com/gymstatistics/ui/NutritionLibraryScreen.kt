@@ -14,6 +14,8 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
@@ -31,6 +33,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 
 private val portionSaver = Saver<List<NutritionPortion>, String>(
@@ -44,10 +47,11 @@ internal fun NutritionLibraryScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
     val repository = remember(context) { NutritionCatalogRepository(context) }
+    val favoritesRepository = remember(context) { NutritionFavoritesRepository(context) }
     var attempt by remember { mutableIntStateOf(0) }
-    val result by produceState<Result<NutritionCatalog>?>(null, attempt) {
+    val result by produceState<Result<Pair<NutritionCatalog, Set<String>>>?>(null, attempt) {
         value = null
-        value = try { Result.success(repository.load()) } catch (error: Exception) {
+        value = try { Result.success(repository.load() to favoritesRepository.load()) } catch (error: Exception) {
             if (error is CancellationException) throw error
             Result.failure(error)
         }
@@ -62,9 +66,9 @@ internal fun NutritionLibraryScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        val catalog = result?.getOrNull()
+        val catalog = result?.getOrNull()?.first
         if (catalog != null) {
-            NutritionCatalogContent(catalog, Modifier.padding(padding).consumeWindowInsets(padding))
+            NutritionCatalogContent(catalog, result!!.getOrThrow().second, favoritesRepository, Modifier.padding(padding).consumeWindowInsets(padding))
             if (showSource) NutritionSourceDialog(catalog) { showSource = false }
         } else {
             Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -84,9 +88,14 @@ internal fun NutritionLibraryScreen(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifier) {
+private fun NutritionCatalogContent(catalog: NutritionCatalog, initialFavorites: Set<String>, favoritesRepository: NutritionFavoritesRepository, modifier: Modifier) {
     var query by rememberSaveable { mutableStateOf("") }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var favorites by remember { mutableStateOf(initialFavorites) }
+    var favoriteBusy by remember { mutableStateOf(false) }
+    var favoriteError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var portions by rememberSaveable(stateSaver = portionSaver) { mutableStateOf(emptyList<NutritionPortion>()) }
     var showCart by rememberSaveable { mutableStateOf(false) }
     // Saved UI state may refer to a previous bundled snapshot after app restoration.
@@ -99,7 +108,7 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
     val category = catalog.categories.firstOrNull { it.id == categoryId }
     val needle = query.trim()
     val products = catalog.products.filter { product ->
-        (category == null || product.id in category.productIds) && product.name.contains(needle, ignoreCase = true)
+        (category == null || product.id in category.productIds) && (!favoritesOnly || product.id in favorites) && product.name.contains(needle, ignoreCase = true)
     }
     fun change(productId: String, variantId: String, update: (Double) -> Double) {
         val latest = currentPortions()
@@ -114,14 +123,30 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         )
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(category == null, { categoryId = null }, label = { Text("全部") })
-            catalog.categories.forEach { entry -> FilterChip(categoryId == entry.id, { categoryId = entry.id }, label = { Text(entry.name) }) }
+            FilterChip(category == null && !favoritesOnly, { categoryId = null; favoritesOnly = false }, label = { Text("全部") })
+            FilterChip(favoritesOnly, { categoryId = null; favoritesOnly = true }, label = { Text("收藏") }, leadingIcon = { Icon(Icons.Rounded.Star, null, Modifier.size(18.dp)) })
+            catalog.categories.forEach { entry -> FilterChip(!favoritesOnly && categoryId == entry.id, { categoryId = entry.id; favoritesOnly = false }, label = { Text(entry.name) }) }
         }
         Text("官方每份数据（更新于 ${catalog.sourceUpdated}）", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        favoriteError?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (products.isEmpty()) item { Text("没有匹配的餐品", Modifier.padding(16.dp)) }
+            if (products.isEmpty()) item { Text(if (favoritesOnly && favorites.none { id -> catalog.products.any { it.id == id } }) "暂无收藏的餐品" else "没有匹配的餐品", Modifier.padding(16.dp)) }
             items(products, key = { it.id }) { product ->
-                NutritionProductCard(product) { variant ->
+                NutritionProductCard(product, product.id in favorites, !favoriteBusy, onFavorite = {
+                    if (!favoriteBusy) {
+                        val next = if (product.id in favorites) favorites - product.id else favorites + product.id
+                        favoriteBusy = true
+                        favoriteError = null
+                        scope.launch {
+                            try {
+                                if (favoritesRepository.save(next)) favorites = next else favoriteError = "收藏保存失败，请重试"
+                            } catch (error: Exception) {
+                                if (error is CancellationException) throw error
+                                favoriteError = "收藏保存失败，请重试"
+                            } finally { favoriteBusy = false }
+                        }
+                    }
+                }) { variant ->
                     change(product.id, variant.id) { it + 1 }
                 }
             }
@@ -157,6 +182,8 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
                         Card(shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    NutritionProductImage(product, 44.dp)
+                                    Spacer(Modifier.width(10.dp))
                                     Text("${product.name}（${variant.name}）", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                                     IconButton(onClick = { change(product.id, variant.id) { 0.0 } }) { Icon(Icons.Rounded.Delete, "移除$label") }
                                 }
@@ -176,13 +203,22 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, modifier: Modifie
 }
 
 @Composable
-private fun NutritionProductCard(product: NutritionProduct, onAdd: (NutritionVariant) -> Unit) {
+private fun NutritionProductCard(product: NutritionProduct, favorite: Boolean, favoriteEnabled: Boolean, onFavorite: () -> Unit, onAdd: (NutritionVariant) -> Unit) {
     var selectedId by rememberSaveable(product.id) { mutableStateOf(product.variants.first().id) }
     var expanded by remember { mutableStateOf(false) }
     val variant = product.variants.firstOrNull { it.id == selectedId } ?: product.variants.first()
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(product.name, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NutritionProductImage(product)
+                Spacer(Modifier.width(12.dp))
+                Text(product.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                IconButton(onClick = onFavorite, enabled = favoriteEnabled) {
+                    Icon(if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        (if (favorite) "取消收藏" else "收藏") + product.name,
+                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("≈${nutritionNumber(variant.perServing.energyKcal, true)} kcal / 份", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 Box {
@@ -238,6 +274,7 @@ private fun NutritionSourceDialog(catalog: NutritionCatalog, onDismiss: () -> Un
         onDismissRequest = onDismiss, title = { Text("数据来源与说明") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("来源：麦当劳中国官网营养计算器")
+            Text("食品图片来自官网同一餐品的图片记录，已打包到本地，离线可用。")
             Text("官方营养数据更新：${catalog.sourceUpdated}\n本地采集日期：$date\n${catalog.products.size} 款餐品，${catalog.products.sumOf { it.variants.size }} 种规格")
             Text(catalog.disclaimer)
             Text("全部数值按官方每份口径；kcal 由 kJ ÷ 4.184 换算。未核实的字段不作为克重，不转换为每 100g。当前配餐不写入训练记录或食物分析历史。")

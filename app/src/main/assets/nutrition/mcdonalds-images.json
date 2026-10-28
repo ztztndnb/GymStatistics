@@ -1,0 +1,659 @@
+{
+  "sourceUrl": "https://www.mcdonalds.com.cn/nutrition_calculator",
+  "images": [
+    {
+      "productId": "15",
+      "productName": "猪柳麦满分",
+      "assetPath": "nutrition/images/15.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091558332871.png",
+      "sha256": "ce5056a4c8eb70868e722c13052e24aff3fae701fc98b0d2708a382f1170d9c5"
+    },
+    {
+      "productId": "17",
+      "productName": "猪柳蛋麦满分",
+      "assetPath": "nutrition/images/17.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091558498724.png",
+      "sha256": "1b4d4e47288f545f824786179e3c7d2751d89e071a7c9026b4e0b871cf6468e4"
+    },
+    {
+      "productId": "20",
+      "productName": "火腿扒麦满分",
+      "assetPath": "nutrition/images/20.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091559476910.png",
+      "sha256": "b537b66a13bd83160541986367c2dfae16febc28e90e2d175d4a7f68a9de7037"
+    },
+    {
+      "productId": "21",
+      "productName": "薯条",
+      "assetPath": "nutrition/images/21.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091547349086.png",
+      "sha256": "1f39c69c9e0974bdc49d5e2e0030ffb70dffefc1b5330db41a6ad658966a545b"
+    },
+    {
+      "productId": "22",
+      "productName": "圆筒冰淇淋",
+      "assetPath": "nutrition/images/22.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/05/202005270949182813.png",
+      "sha256": "9b6bb67aab50c3fdad77bbe177e9669c5d04b8b71b2d4d0f07359cbdeb6c23d3"
+    },
+    {
+      "productId": "23",
+      "productName": "麦乐鸡 (5块)",
+      "assetPath": "nutrition/images/23.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091547543048.png",
+      "sha256": "aa8fd372de511b6856c039f79246d57e1fb612bca668813f763352b25157d853"
+    },
+    {
+      "productId": "24",
+      "productName": "玉米杯",
+      "assetPath": "nutrition/images/24.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091548118821.png",
+      "sha256": "b37797baadb11abbef7244ef1de9d9e33f81bc425413457e6a7094589b144520"
+    },
+    {
+      "productId": "26",
+      "productName": "麦辣鸡翅",
+      "assetPath": "nutrition/images/26.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/04/202504091714077263.png",
+      "sha256": "eb6d6a56ae190dfa41d09974d20698fd0455e3874288981bae7d2df0e3260472"
+    },
+    {
+      "productId": "32",
+      "productName": "朱古力新地",
+      "assetPath": "nutrition/images/32.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/03/202003191510126381.png",
+      "sha256": "47403056ca85a8a8f609379da79d85a201ed33c5398cb538f7c8b715a93af607"
+    },
+    {
+      "productId": "33",
+      "productName": "草莓新地",
+      "assetPath": "nutrition/images/33.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/03/202003191449258974.png",
+      "sha256": "a9e85b59491501ee7dcdccf70f2a503060d965dd55f40b0a9cdd2020eda24d59"
+    },
+    {
+      "productId": "34",
+      "productName": "奥利奥麦旋风",
+      "assetPath": "nutrition/images/34.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/03/202003191447419769.png",
+      "sha256": "a52c1b7e5595507edbff83ccb4c0da4b30309b7a8be45ba652c6397ce18d6c65"
+    },
+    {
+      "productId": "35",
+      "productName": "草莓麦旋风",
+      "assetPath": "nutrition/images/35.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/03/202003191447495324.png",
+      "sha256": "6afad0402fa2a6c76ee485cb3895da68e956eeb65669acda0ee1e69c899258c0"
+    },
+    {
+      "productId": "36",
+      "productName": "香芋派",
+      "assetPath": "nutrition/images/36.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091556569394.png",
+      "sha256": "77010a618ebe3652f2379bac96c7b98ed090e8365be510b37eb21ef688435c99"
+    },
+    {
+      "productId": "37",
+      "productName": "菠萝派",
+      "assetPath": "nutrition/images/37.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091557147058.png",
+      "sha256": "dc80e53a378577362c4acbb5a242011d8879fb5b7785de57c858dd37413a032f"
+    },
+    {
+      "productId": "39",
+      "productName": "大脆鸡扒麦满分",
+      "assetPath": "nutrition/images/39.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091600076790.png",
+      "sha256": "ef32dd7f91da5a239fb8b3901917507b096fa2392f153bdb0e700d6ba02aa7e4"
+    },
+    {
+      "productId": "40",
+      "productName": "原味板烧鸡腿麦满分",
+      "assetPath": "nutrition/images/40.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/09/202209301037275168.png",
+      "sha256": "ceb4dc05ea1830602658e4f4409a48c52ca05e7fc7e6ab7f8477a54be2762a11"
+    },
+    {
+      "productId": "41",
+      "productName": "双层原味板烧鸡腿麦满分",
+      "assetPath": "nutrition/images/41.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/09/202209301037584746.png",
+      "sha256": "cd5053f3d915f526adf5a49e453508e002694315b7b017a34ae56d73f35a831c"
+    },
+    {
+      "productId": "42",
+      "productName": "汉堡包",
+      "assetPath": "nutrition/images/42.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081011488477.png",
+      "sha256": "46bb53dd130d8cc53ec855daac2aabacca5743548f983206c796e6a439f91409"
+    },
+    {
+      "productId": "43",
+      "productName": "吉士汉堡包",
+      "assetPath": "nutrition/images/43.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081013284833.png",
+      "sha256": "6ef69e30f76d6ea66985e5b812bc5061de4a47695b16656cf3f73244a9716788"
+    },
+    {
+      "productId": "44",
+      "productName": "双层吉士汉堡",
+      "assetPath": "nutrition/images/44.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505191553352680.png",
+      "sha256": "2e3bceccbe387e2235277097f0a8dd843514b5b675b30fd217e2c9bc0555c64a"
+    },
+    {
+      "productId": "45",
+      "productName": "麦香鸡",
+      "assetPath": "nutrition/images/45.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081013011355.png",
+      "sha256": "d229ceded1e7dd1997462099c93a0cea6a3e85f5168ff2b7d61a01f0b868eb7e"
+    },
+    {
+      "productId": "46",
+      "productName": "麦香鱼",
+      "assetPath": "nutrition/images/46.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081013175111.png",
+      "sha256": "b12c4934602ef8f2d2c37e94df35b1373023d54f39c35ba49bd114418c4f0d00"
+    },
+    {
+      "productId": "47",
+      "productName": "麦辣鸡腿汉堡",
+      "assetPath": "nutrition/images/47.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/04/202504091717393584.png",
+      "sha256": "4d99dbafb206819ae1c625ddca6a13d7ab4f944665dd5876b9150efed919554c"
+    },
+    {
+      "productId": "48",
+      "productName": "板烧鸡腿堡",
+      "assetPath": "nutrition/images/48.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/10/202410121642022710.png",
+      "sha256": "a663bd065795e1c2ad6b906d9196c4fa6b42e965613bbbb46eaafd8b9aca2ad6"
+    },
+    {
+      "productId": "49",
+      "productName": "巨无霸",
+      "assetPath": "nutrition/images/49.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081011205699.png",
+      "sha256": "2550ca1f2bfea96402387b62a049a99d56ec3a69e60e93783c5d2db282acd644"
+    },
+    {
+      "productId": "50",
+      "productName": "培根蔬萃双层牛堡",
+      "assetPath": "nutrition/images/50.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/09/202209261029176483.png",
+      "sha256": "d344e7aae797dbfbe65397786dde26dc10efb044a31b12289345eecd8df30449"
+    },
+    {
+      "productId": "51",
+      "productName": "可口可乐",
+      "assetPath": "nutrition/images/51.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091541242793.png",
+      "sha256": "aef0773e3a64fc6c5763f4e66a3d0d389e34e859d0c08018dee95ccc133ccb25"
+    },
+    {
+      "productId": "52",
+      "productName": "雪碧",
+      "assetPath": "nutrition/images/52.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091543354438.png",
+      "sha256": "497f30a6f0610d80294432fccbec7f02a56d8e2d14a189ce77b17b0e4a9f348f"
+    },
+    {
+      "productId": "53",
+      "productName": "无糖可口可乐",
+      "assetPath": "nutrition/images/53.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091542266222.png",
+      "sha256": "9b2d2df67f1dcdd35f123d3bf062b791f209760485e3671929b9c0bca2f36449"
+    },
+    {
+      "productId": "57",
+      "productName": "锡兰红茶",
+      "assetPath": "nutrition/images/57.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091546249996.png",
+      "sha256": "35b25d5c983a903165a997d2ff4aef43448665bb8c3c1f24058b81830e66f5f4"
+    },
+    {
+      "productId": "61",
+      "productName": "纯牛奶（盒装）",
+      "assetPath": "nutrition/images/61.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412031439237239.png",
+      "sha256": "e5934f1ac0b6266154d577da2ceec3881e112857f5278f859332d8758dac2b98"
+    },
+    {
+      "productId": "62",
+      "productName": "优品豆浆",
+      "assetPath": "nutrition/images/62.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412031442538648.png",
+      "sha256": "fcbe22d03e7db81bc4de7e7b7e725d6470bc98314cdbddadff7801c7877cf6d5"
+    },
+    {
+      "productId": "63",
+      "productName": "纯悦",
+      "assetPath": "nutrition/images/63.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/11/202411281844518339.png",
+      "sha256": "2908957ec7479a9e1e7934c984a30a097c14a3dcfb3c8ec47454fc2cd0e9704d"
+    },
+    {
+      "productId": "66",
+      "productName": "阳光橙麦炫酷",
+      "assetPath": "nutrition/images/66.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/03/202003191452518874.png",
+      "sha256": "68c5ea739276965076c81886d5b7b389b629d5f4af069f7a11dc75d58a66d713"
+    },
+    {
+      "productId": "101",
+      "productName": "那么大鸡排（椒盐风味）",
+      "assetPath": "nutrition/images/101.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091551151077.png",
+      "sha256": "5273bd59782012f8985c66b1ffd53ac6a1b55486799b8e336198da927f7c1f22"
+    },
+    {
+      "productId": "102",
+      "productName": "阳光柠檬红茶",
+      "assetPath": "nutrition/images/102.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412111430239925.png",
+      "sha256": "15c4cd230bf0acf23e7afd71296d2a9b7db43f59e74613d7a7aae853184e71a8"
+    },
+    {
+      "productId": "107",
+      "productName": "脆薯饼",
+      "assetPath": "nutrition/images/107.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091604513345.png",
+      "sha256": "63e158e5e1dbc5e0016accd1f88b3db4543ab4fb9c3625fb9df9b9ac8705a3fb"
+    },
+    {
+      "productId": "108",
+      "productName": "脆香油条",
+      "assetPath": "nutrition/images/108.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091605077842.png",
+      "sha256": "aadfd09efb7e49bf5977e5438434c7c7ab3d7327a7f3abc47032d0035a57df2a"
+    },
+    {
+      "productId": "111",
+      "productName": "100%苹果汁",
+      "assetPath": "nutrition/images/111.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505081052503366.png",
+      "sha256": "72237ab42d8eeba5aa93fc8c489f315f78aac7e4d5d37db3867cf3166055b0cb"
+    },
+    {
+      "productId": "119",
+      "productName": "汉堡包",
+      "assetPath": "nutrition/images/119.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091606247063.png",
+      "sha256": "3bfeb7ce454f5d32528770403f7dc24a188586fce126baec7c6056311a65823a"
+    },
+    {
+      "productId": "121",
+      "productName": "麦乐鸡（4块）",
+      "assetPath": "nutrition/images/121.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091607474918.png",
+      "sha256": "aa8fd372de511b6856c039f79246d57e1fb612bca668813f763352b25157d853"
+    },
+    {
+      "productId": "122",
+      "productName": "玉米杯 (小)",
+      "assetPath": "nutrition/images/122.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091608181706.png",
+      "sha256": "b37797baadb11abbef7244ef1de9d9e33f81bc425413457e6a7094589b144520"
+    },
+    {
+      "productId": "125",
+      "productName": "纯牛奶（盒装）",
+      "assetPath": "nutrition/images/125.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412061721257642.png",
+      "sha256": "e5934f1ac0b6266154d577da2ceec3881e112857f5278f859332d8758dac2b98"
+    },
+    {
+      "productId": "129",
+      "productName": "纯悦",
+      "assetPath": "nutrition/images/129.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412061720458477.png",
+      "sha256": "2908957ec7479a9e1e7934c984a30a097c14a3dcfb3c8ec47454fc2cd0e9704d"
+    },
+    {
+      "productId": "136",
+      "productName": "苹果片",
+      "assetPath": "nutrition/images/136.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091552098343.png",
+      "sha256": "7333821e888732257dc31203e361135b9bf78a62e28c5f681edbfd34561dca41"
+    },
+    {
+      "productId": "141",
+      "productName": "美汁源100%苹果汁 (小)",
+      "assetPath": "nutrition/images/141.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505081053474066.png",
+      "sha256": "72237ab42d8eeba5aa93fc8c489f315f78aac7e4d5d37db3867cf3166055b0cb"
+    },
+    {
+      "productId": "145",
+      "productName": "不素之霸双层牛堡",
+      "assetPath": "nutrition/images/145.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/07/202407021437072297.png",
+      "sha256": "fab679b37fe0951c501d6a99901d56bb671a66f1db3e288fc136f13e778efe3d"
+    },
+    {
+      "productId": "146",
+      "productName": "双层深海鳕鱼堡",
+      "assetPath": "nutrition/images/146.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208111413054231.png",
+      "sha256": "9c94ffe4bcaebfcf27eefab431e3d653e0ebc1686f9d6e1da7f21a7ea38a4aad"
+    },
+    {
+      "productId": "153",
+      "productName": "薯条（迷你）",
+      "assetPath": "nutrition/images/153.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2019/09/201909241658187803.png",
+      "sha256": "4daaba239bbb720817cde7ee7e1e972e96d86e7595fdd2e266f5ffdae406702e"
+    },
+    {
+      "productId": "154",
+      "productName": "儿童鱼排堡",
+      "assetPath": "nutrition/images/154.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2019/09/201909241723061060.png",
+      "sha256": "30f134924b140bfd12af5fb1a09b8a6c6eef9546956eec3f3f2e873e2cff759a"
+    },
+    {
+      "productId": "155",
+      "productName": "苹果片",
+      "assetPath": "nutrition/images/155.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091608341382.png",
+      "sha256": "7333821e888732257dc31203e361135b9bf78a62e28c5f681edbfd34561dca41"
+    },
+    {
+      "productId": "161",
+      "productName": "培根安格斯厚牛堡",
+      "assetPath": "nutrition/images/161.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081022028042.png",
+      "sha256": "7e76e4e93d4abd1d44b448abb9c72be04066f75dcee80f10cf18e816e9a6a9e7"
+    },
+    {
+      "productId": "162",
+      "productName": "芝士安格斯厚牛堡",
+      "assetPath": "nutrition/images/162.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208081022182900.png",
+      "sha256": "534b9c54fabe71f2599d2cd23687ba25fd620dbd8c459960f507a523bdde3f13"
+    },
+    {
+      "productId": "168",
+      "productName": "皮蛋鸡肉粥",
+      "assetPath": "nutrition/images/168.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/05/202005061021247170.png",
+      "sha256": "87538a83940bcaffc10eca997b9683b494d9aef13347e3fd2b859ff9da9b225d"
+    },
+    {
+      "productId": "169",
+      "productName": "雪菜脆笋鸡肉粥",
+      "assetPath": "nutrition/images/169.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2020/05/202005061023475981.png",
+      "sha256": "ad400261a4e4ecaa8957a1c62452613701fbab1b5e125beea50c67c931da6b40"
+    },
+    {
+      "productId": "172",
+      "productName": "猪柳炒双蛋堡",
+      "assetPath": "nutrition/images/172.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208091601375124.png",
+      "sha256": "2e7cdc59be4cfb8ff32cb92900ec8b9bbd3bbcad3e2c160acf1d2094daafb744"
+    },
+    {
+      "productId": "209",
+      "productName": "火腿扒早安营养卷",
+      "assetPath": "nutrition/images/209.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208021616493001.png",
+      "sha256": "340ba45e5e07701ce88558de435978207979ceab2bc1b709fd79e8ae4e4c0f82"
+    },
+    {
+      "productId": "220",
+      "productName": "德式图林根香肠",
+      "assetPath": "nutrition/images/220.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2021/04/202104191521441185.png",
+      "sha256": "8157d4fa48c4ea4740dffef54127f6cab1d86ffbbf1ddf9d680361e5d7cd54b2"
+    },
+    {
+      "productId": "221",
+      "productName": "图林根香肠早安营养卷",
+      "assetPath": "nutrition/images/221.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208021618177760.png",
+      "sha256": "eac2b9296b34eafe7f68efba6e89966cfb08b6bf46449d82151598f2d380fe58"
+    },
+    {
+      "productId": "248",
+      "productName": "【美汁源】“黄金橙橙”",
+      "assetPath": "nutrition/images/248.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/11/202411281822478466.png",
+      "sha256": "074a40b8da9db2ac5d8aa96f7c4088dadde09b28848443cbe28062a792c6cf4d"
+    },
+    {
+      "productId": "250",
+      "productName": "优品豆浆",
+      "assetPath": "nutrition/images/250.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/12/202412031411454215.png",
+      "sha256": "fcbe22d03e7db81bc4de7e7b7e725d6470bc98314cdbddadff7801c7877cf6d5"
+    },
+    {
+      "productId": "269",
+      "productName": "浓浓黑巧雪冰",
+      "assetPath": "nutrition/images/269.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292219557802.png",
+      "sha256": "0acfda177709e7310ebe70d8517b7f942e35845298bc980781dca70060a63258"
+    },
+    {
+      "productId": "271",
+      "productName": "浓浓抹茶雪冰",
+      "assetPath": "nutrition/images/271.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292219089745.png",
+      "sha256": "73921847561383ed06e0886bce049cebce060eff4d59baef0ce321a1e61774fc"
+    },
+    {
+      "productId": "276",
+      "productName": "热牛奶",
+      "assetPath": "nutrition/images/276.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292218491274.png",
+      "sha256": "9daf920587c15a7d078aa726578f479eb601e57c9a62b080b75f1f76a8799367"
+    },
+    {
+      "productId": "277",
+      "productName": "冰牛奶",
+      "assetPath": "nutrition/images/277.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292218348675.png",
+      "sha256": "b89ca10ac79a3df5b14e083ed437bd84900d01ce8edfab8dd437ca735f59a1d5"
+    },
+    {
+      "productId": "287",
+      "productName": "冰奶铁",
+      "assetPath": "nutrition/images/287.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292204543004.png",
+      "sha256": "1e37a63b9fe3260b2d2b11d95afbd77fb06f50f93faa22968fff6b9de8b9476c"
+    },
+    {
+      "productId": "288",
+      "productName": "热奶铁",
+      "assetPath": "nutrition/images/288.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292205408283.png",
+      "sha256": "32422c7153a0e96129b2136e6c3f56383c81ec5bfc03cd39b93bf14793dfe815"
+    },
+    {
+      "productId": "289",
+      "productName": "冰燕麦奶铁",
+      "assetPath": "nutrition/images/289.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292206117637.png",
+      "sha256": "6d14f1c65648a755227ace2d03a98389c6fe3e6f4d2429252e13ff44ce41610b"
+    },
+    {
+      "productId": "290",
+      "productName": "热燕麦奶铁",
+      "assetPath": "nutrition/images/290.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292206368008.png",
+      "sha256": "72818f116191dc2fb378d0ac61577e35ea9e6fd3ed132e03ea092c06077c1d1c"
+    },
+    {
+      "productId": "293",
+      "productName": "冰美式",
+      "assetPath": "nutrition/images/293.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292208383944.png",
+      "sha256": "fb71bef9150152e98ca00ccb33a0c7507961460d0c0d03dd2fb65523275348bd"
+    },
+    {
+      "productId": "294",
+      "productName": "热美式",
+      "assetPath": "nutrition/images/294.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292209017033.png",
+      "sha256": "e4e15fe5fb928e7132400aff8d47bad197e732408982d09388a111aabb85f1ab"
+    },
+    {
+      "productId": "295",
+      "productName": "冰焦糖玛奇朵",
+      "assetPath": "nutrition/images/295.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292209215242.png",
+      "sha256": "6b362a321cc1713d74b3bc6e412e84b478c16cbbdc3cd7b809a92bba7a7e79fd"
+    },
+    {
+      "productId": "298",
+      "productName": "热焦糖玛奇朵",
+      "assetPath": "nutrition/images/298.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292209422511.png",
+      "sha256": "b4a2ad75ea324d07223692e655ce1350e3add428f0a070dac391932199249650"
+    },
+    {
+      "productId": "299",
+      "productName": "卡布奇诺",
+      "assetPath": "nutrition/images/299.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292210057378.png",
+      "sha256": "819460f2ca2335d9bacd90a1d024db231f20da2b4ba227e663aa159982c0b1e1"
+    },
+    {
+      "productId": "303",
+      "productName": "冰浓浓燕麦黑巧",
+      "assetPath": "nutrition/images/303.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292214326960.png",
+      "sha256": "0e360ae090eabd5a911ace6177649469941cb03901ca03c223d4f44e8ac6078c"
+    },
+    {
+      "productId": "304",
+      "productName": "冰燕麦奶",
+      "assetPath": "nutrition/images/304.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292214522529.png",
+      "sha256": "5d8efd063247b9a80e5f25bc635bafd87ad803d1447f05667d080f24fa09cda5"
+    },
+    {
+      "productId": "305",
+      "productName": "热燕麦奶",
+      "assetPath": "nutrition/images/305.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292215082309.png",
+      "sha256": "a6c90e51bfcb74ffa6958ae74577091484435ab1b46550435e07284c93b78876"
+    },
+    {
+      "productId": "306",
+      "productName": "冰浓浓抹茶牛奶",
+      "assetPath": "nutrition/images/306.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292216395610.png",
+      "sha256": "ad277ea577a91e43d8840cf73fea774d8f8592e3b66e867137cc836cc5a760bd"
+    },
+    {
+      "productId": "307",
+      "productName": "热浓浓抹茶牛奶",
+      "assetPath": "nutrition/images/307.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292216596791.png",
+      "sha256": "0078f34811870090e5d2c993df59945fa437b3bdc293c51a7b1992047c3d0c17"
+    },
+    {
+      "productId": "308",
+      "productName": "冰浓浓黑巧",
+      "assetPath": "nutrition/images/308.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292217199815.png",
+      "sha256": "0e360ae090eabd5a911ace6177649469941cb03901ca03c223d4f44e8ac6078c"
+    },
+    {
+      "productId": "309",
+      "productName": "热浓浓黑巧",
+      "assetPath": "nutrition/images/309.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208292217366580.png",
+      "sha256": "dae480278d8d9923cf8133369123f1458fb57696448699417bbb8bcfc57394a0"
+    },
+    {
+      "productId": "312",
+      "productName": "抹茶阿芙佳朵",
+      "assetPath": "nutrition/images/312.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/07/202407251729244473.png",
+      "sha256": "91c39c078d212fcb33b660f5cdac8976ae3881cee11025587df4b3120f53ec95"
+    },
+    {
+      "productId": "313",
+      "productName": "咖啡阿芙佳朵",
+      "assetPath": "nutrition/images/313.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/07/202407251730361207.png",
+      "sha256": "b094ac1519f0a0249e6d9049721ead08b69745666587af227d29140543998edc"
+    },
+    {
+      "productId": "314",
+      "productName": "热浓浓燕麦黑巧",
+      "assetPath": "nutrition/images/314.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/08/202208301011268722.png",
+      "sha256": "dae480278d8d9923cf8133369123f1458fb57696448699417bbb8bcfc57394a0"
+    },
+    {
+      "productId": "320",
+      "productName": "原味板烧鸡腿炒双蛋堡",
+      "assetPath": "nutrition/images/320.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/12/202212191104292706.png",
+      "sha256": "08f7ce0bdae0ca8c9846fd39b116b9371687b97fd962b3d2195c349abc338683"
+    },
+    {
+      "productId": "321",
+      "productName": "双层猪柳蛋麦满分",
+      "assetPath": "nutrition/images/321.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2022/12/202212191104077687.png",
+      "sha256": "062fb05fb4f350ae8c1995f869a0cdc56feddfb08919cff30d78325abcc7ca9c"
+    },
+    {
+      "productId": "326",
+      "productName": "脆脆薯条",
+      "assetPath": "nutrition/images/326.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2024/11/202411281827123412.png",
+      "sha256": "65ed21bdbbc943a82107c6b18c1cf7852783ea746c011e7405fe1388d745cf49"
+    },
+    {
+      "productId": "329",
+      "productName": "薄皮焦香V翅",
+      "assetPath": "nutrition/images/329.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/03/202503261723251059.png",
+      "sha256": "62dc19acd62d8cb753d4752f83210c93e537d91b06fd2a903e348d529f37011a"
+    },
+    {
+      "productId": "335",
+      "productName": "“苹板”支撑Pro",
+      "assetPath": "nutrition/images/335.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505112154184281.png",
+      "sha256": "0e2a557de12cb4a5bba2dc5ea464ccfe9b2b4cd5ee6a8c3593399246234567f6"
+    },
+    {
+      "productId": "338",
+      "productName": "牛气满满",
+      "assetPath": "nutrition/images/338.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505112207211930.png",
+      "sha256": "c5c2835655e62ee34a04dacc07905d6d998288a52f63fec3d0133e1e017aa468"
+    },
+    {
+      "productId": "340",
+      "productName": "迷你朱古力新地",
+      "assetPath": "nutrition/images/340.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505112256468336.png",
+      "sha256": "1539503a3d9eddda28afc0bedf77db0a26195a044955bdbf1a81a9fc165ab5d5"
+    },
+    {
+      "productId": "341",
+      "productName": "迷你草莓新地",
+      "assetPath": "nutrition/images/341.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505112259357730.png",
+      "sha256": "ea60cedb8aa42b742823aa63a90153bcb393acb62535f7ec2c57582bd06a7c12"
+    },
+    {
+      "productId": "344",
+      "productName": "怡泉+C",
+      "assetPath": "nutrition/images/344.png",
+      "sourceUrl": "https://officiaweb-afd.mcdonalds.com.cn/public/upload/attachment/2025/05/202505112325105835.png",
+      "sha256": "7906d3bb08e7068bdd020e2c50a8842725ffcb745b77d47cb0619de3c9577b90"
+    }
+  ],
+  "missing": [],
+  "collectedAt": "2026-10-28T07:30:24.201Z",
+  "pageSha256": "4f744c29fb6b5627c3c30225b6b00ea7e73c35ab960e0225a0426c3b74bdab7c"
+}

@@ -1,7 +1,9 @@
 package com.gymstatistics.ui
 
 import android.content.Intent
+import android.content.ContextWrapper
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -13,6 +15,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import com.gymstatistics.MainActivity
+import com.gymstatistics.data.NutritionFavoritesRepository
+import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -27,12 +34,90 @@ class NutritionLibraryTest {
     private lateinit var activity: MainActivity
 
     @Before fun openApp() {
+        File(instrumentation.targetContext.filesDir, "nutrition-favorites.json").delete()
         activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
     }
 
     @After fun closeApp() {
         if (::activity.isInitialized) instrumentation.runOnMainSync { activity.finish() }
+        File(instrumentation.targetContext.filesDir, "nutrition-favorites.json").delete()
+    }
+
+    @Test fun officialPicturesAndFavoritesSurviveReopeningAndCanBeRemoved() {
+        fun openLibrary() {
+            compose.onNodeWithContentDescription("营养库").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("搜索餐品").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("搜索餐品").performTextReplacement("薯条")
+            Espresso.closeSoftKeyboard()
+            compose.waitForIdle()
+        }
+        openLibrary()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("薯条官方图片").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("收藏薯条").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("取消收藏薯条").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("取消收藏薯条").assertIsDisplayed()
+        instrumentation.runOnMainSync { activity.finish() }
+        activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        openLibrary()
+        compose.onNodeWithContentDescription("取消收藏薯条").assertIsDisplayed()
+        compose.onNodeWithText("收藏").performClick()
+        compose.onNodeWithText("搜索餐品").performTextReplacement("巨无霸")
+        compose.onNodeWithText("没有匹配的餐品").assertExists()
+        compose.onNodeWithText("搜索餐品").performTextReplacement("薯条")
+        Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("选择薯条规格").performClick()
+        compose.onNodeWithText("小", useUnmergedTree = true).performClick()
+        compose.onNodeWithContentDescription("添加薯条（小）").performClick()
+        compose.onNodeWithContentDescription("取消收藏薯条").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("暂无收藏的餐品").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("暂无收藏的餐品").assertIsDisplayed()
+        compose.onNodeWithText("查看已选").performClick()
+        compose.onNodeWithText("薯条（小）").assertIsDisplayed()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("薯条官方图片").fetchSemanticsNodes().isNotEmpty() }
+        Espresso.pressBack()
+        compose.onNodeWithText("全部").performClick()
+        compose.onNodeWithContentDescription("收藏薯条").assertIsDisplayed()
+    }
+
+    @Test fun failedFavoriteWriteKeepsThePreviousDiskStateAndCanBeRetried() {
+        val directory = Files.createTempDirectory(instrumentation.targetContext.cacheDir.toPath(), "nutrition-favorites-").toFile()
+        val context = object : ContextWrapper(instrumentation.targetContext) {
+            override fun getFilesDir(): File = directory
+        }
+        try {
+            val repository = NutritionFavoritesRepository(context)
+            assertTrue(runBlocking { repository.save(setOf("49")) })
+            val blocked = File(directory, "nutrition-favorites.json.new")
+            assertTrue(blocked.mkdir())
+            val blocker = File(blocked, "block-write").apply { writeText("test") }
+            assertFalse(runBlocking { repository.save(setOf("21")) })
+            assertEquals(setOf("49"), runBlocking { NutritionFavoritesRepository(context).load() })
+            assertTrue(blocker.delete())
+            assertTrue(blocked.delete())
+            assertTrue(runBlocking { repository.save(setOf("21")) })
+            assertEquals(setOf("21"), runBlocking { NutritionFavoritesRepository(context).load() })
+        } finally { check(directory.deleteRecursively()) }
+    }
+
+    @Test fun failedFavoriteCommitIsNotReportedAsSaved() {
+        val directory = Files.createTempDirectory(instrumentation.targetContext.cacheDir.toPath(), "nutrition-commit-").toFile()
+        val context = object : ContextWrapper(instrumentation.targetContext) {
+            override fun getFilesDir(): File = directory
+        }
+        try {
+            // Allow writing .new, but prevent its final rename into the destination.
+            val destination = File(directory, "nutrition-favorites.json").apply { check(mkdir()) }
+            val blocker = File(destination, "block-rename").apply { writeText("test") }
+            val repository = NutritionFavoritesRepository(context)
+            assertFalse(runBlocking { repository.save(setOf("21")) })
+            assertTrue(blocker.delete())
+            assertTrue(destination.delete())
+            assertTrue(runBlocking { repository.save(setOf("21")) })
+            assertEquals(setOf("21"), runBlocking { NutritionFavoritesRepository(context).load() })
+        } finally { check(directory.deleteRecursively()) }
     }
 
     @Test fun homeEntryLoadsOfficialDataAndReturnsHome() {
