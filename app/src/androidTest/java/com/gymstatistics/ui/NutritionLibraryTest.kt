@@ -33,6 +33,28 @@ class NutritionLibraryTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var activity: MainActivity
 
+    @Test fun lawsonWeightFavoritesAndBrandState() {
+        compose.onNodeWithContentDescription("营养库").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("罗森").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("罗森").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("搜索菜品").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("搜索菜品").performTextReplacement("香肠面包")
+        compose.onNodeWithText("食用重量（克）").performTextReplacement("95")
+        Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("加入配餐").performClick()
+        compose.onNodeWithText("253 kcal").assertIsDisplayed()
+        compose.onNodeWithText("钠 未知 mg").assertIsDisplayed()
+        compose.onNodeWithContentDescription("收藏香肠面包").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("取消收藏香肠面包").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("麦当劳").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("搜索餐品").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("罗森").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("取消收藏香肠面包").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("253 kcal").assertIsDisplayed()
+        val saved = runBlocking { NutritionFavoritesRepository(instrumentation.targetContext).load() }
+        assertTrue(saved.any { it.startsWith("lawson-cn-search-") })
+    }
+
     @Test fun laoxiangjiCanCalculateNutritionByWeight() {
         compose.onNodeWithContentDescription("营养库").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("老乡鸡").fetchSemanticsNodes().isNotEmpty() }

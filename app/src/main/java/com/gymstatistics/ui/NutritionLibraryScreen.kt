@@ -42,20 +42,31 @@ private val portionSaver = Saver<List<NutritionPortion>, String>(
     restore = { runCatching { AppJson.json.decodeFromString<List<NutritionPortion>>(it) }.getOrDefault(emptyList()) },
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+internal enum class NutritionBrand(val label: String) {
+    MCDONALDS("麦当劳"), LAOXIANGJI("老乡鸡"), LAWSON("罗森")
+}
+
 @Composable
-internal fun NutritionLibraryScreen(onBack: () -> Unit) {
-    var laoxiangji by rememberSaveable { mutableStateOf(false) }
-    val stateHolder = rememberSaveableStateHolder()
-    stateHolder.SaveableStateProvider(if (laoxiangji) "laoxiangji" else "mcdonalds") {
-        if (laoxiangji) LaoxiangjiNutritionScreen(onBack) { laoxiangji = false }
-        else McDonaldsNutritionScreen(onBack) { laoxiangji = true }
+internal fun NutritionBrandButtons(current: NutritionBrand, onSelect: (NutritionBrand) -> Unit) {
+    NutritionBrand.entries.filter { it != current }.forEach { brand ->
+        TextButton(onClick = { onSelect(brand) }) { Text(brand.label) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun McDonaldsNutritionScreen(onBack: () -> Unit, onOtherBrand: () -> Unit) {
+internal fun NutritionLibraryScreen(onBack: () -> Unit) {
+    var brand by rememberSaveable { mutableStateOf(NutritionBrand.MCDONALDS) }
+    val stateHolder = rememberSaveableStateHolder()
+    stateHolder.SaveableStateProvider(brand.name) {
+        if (brand == NutritionBrand.MCDONALDS) McDonaldsNutritionScreen(onBack) { brand = it }
+        else WeightNutritionScreen(brand, onBack) { brand = it }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun McDonaldsNutritionScreen(onBack: () -> Unit, onSelectBrand: (NutritionBrand) -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
     val repository = remember(context) { NutritionCatalogRepository(context) }
@@ -75,7 +86,7 @@ private fun McDonaldsNutritionScreen(onBack: () -> Unit, onOtherBrand: () -> Uni
                 title = { Text("麦当劳营养库", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") } },
                 actions = {
-                    TextButton(onClick = onOtherBrand) { Text("老乡鸡") }
+                    NutritionBrandButtons(NutritionBrand.MCDONALDS, onSelectBrand)
                     if (result?.isSuccess == true) TextButton(onClick = { showSource = true }) { Text("来源") }
                 },
             )
