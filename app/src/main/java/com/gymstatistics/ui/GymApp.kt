@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -81,12 +83,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -206,6 +210,7 @@ fun GymApp(viewModel: GymViewModel) {
     val settleOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
+    GymDesignTheme(enabled = screen == Screen.MAIN || screen == Screen.NUTRITION) {
     Scaffold(
         bottomBar = {
             if (navigation.showBottomNavigation) {
@@ -391,9 +396,10 @@ fun GymApp(viewModel: GymViewModel) {
                                 }
                             }
                             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                ElevatedButton(
+                                Button(
+                                    shape = RoundedCornerShape(14.dp),
                                     onClick = { editingExerciseId = null; prefillExercise = null; showAdd = true },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                 ) {
                                     Icon(Icons.Filled.Add, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
@@ -512,6 +518,8 @@ fun GymApp(viewModel: GymViewModel) {
         }
     }
 
+    }
+
     val association = pendingPlanAssociation
     if (association != null) {
         AlertDialog(
@@ -538,9 +546,10 @@ fun GymApp(viewModel: GymViewModel) {
 
 @Composable
 private fun MainBottomNavigation(selectedTab: MainTab, enabled: Boolean, onSelect: (MainTab) -> Unit) {
-    NavigationBar {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
         MainTab.entries.forEach { tab ->
             NavigationBarItem(
+                colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent, selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary),
                 selected = selectedTab == tab,
                 enabled = enabled,
                 onClick = { onSelect(tab) },
@@ -557,7 +566,7 @@ private fun MainBottomNavigation(selectedTab: MainTab, enabled: Boolean, onSelec
                         modifier = Modifier.size(24.dp),
                     )
                 },
-                label = { Text(tab.label) },
+                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
                 alwaysShowLabel = true,
             )
         }
@@ -644,11 +653,20 @@ private fun DayModeContent(
     onCompletePlan: (String) -> Unit,
     onCancelComplete: (String) -> Unit,
 ) {
+    Column(modifier) {
+        val exercises = sessions.firstOrNull { it.date == date.toString() }?.exercises.orEmpty()
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("当天训练", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("${exercises.size} 个动作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(if (mode == WorkoutMode.MANUAL) "手动模式" else "计划模式", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     if (mode == WorkoutMode.MANUAL) {
         WorkoutDayContent(
             date = date,
             sessions = sessions,
-            modifier = modifier,
+            modifier = Modifier.fillMaxWidth().weight(1f),
             onEdit = onEdit,
             onDelete = onDelete,
             onReorder = onReorderManual,
@@ -658,10 +676,11 @@ private fun DayModeContent(
             date = date,
             sessions = sessions,
             plan = plan,
-            modifier = modifier,
+            modifier = Modifier.fillMaxWidth().weight(1f),
             onComplete = onCompletePlan,
             onCancelComplete = onCancelComplete,
         )
+    }
     }
 }
 
@@ -863,13 +882,16 @@ private fun DatePickerHeader(selectedDate: LocalDate, visibleWeekStart: LocalDat
             .clickable(onClick = onOpenCalendar)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.Start,
     ) {
+        Column(Modifier.weight(1f)) {
+            Text("${selectedDate.year}年${selectedDate.monthValue}月", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
             dateHeaderLabel(selectedDate),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
+        }
         Spacer(Modifier.width(4.dp))
         Text("▾", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
     }
@@ -1007,8 +1029,8 @@ private fun WeekDateCells(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .offset(x = animatedHighlightX)
-                    .size(34.dp)
-                    .clip(CircleShape)
+                    .width(34.dp).height(58.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
@@ -1024,7 +1046,7 @@ private fun WeekDateCells(
                     Text(
                         weekdayLabels[i],
                         fontSize = 12.sp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
                         else MaterialTheme.colorScheme.outline,
                     )
                     Spacer(Modifier.height(4.dp))
@@ -1848,6 +1870,7 @@ private fun ActionItemCard(
     onMove: ((Int) -> Float)? = null,
     onDraggingChanged: (Boolean) -> Unit = {},
 ) {
+    var showActions by remember { mutableStateOf(false) }
     var isDragging by remember(exercise.id) { mutableStateOf(false) }
     var dragOffset by remember(exercise.id) { mutableFloatStateOf(0f) }
     val scale by animateFloatAsState(
@@ -1863,7 +1886,8 @@ private fun ActionItemCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = 20.dp, vertical = 2.dp)
+            .clickable(onClick = onEdit)
             .zIndex(if (isDragging) 1f else 0f)
             .graphicsLayer {
                 scaleX = scale
@@ -1875,20 +1899,14 @@ private fun ActionItemCard(
         colors = if (isDragging) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 1f))
         } else {
-            CardDefaults.cardColors()
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         },
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            onMove?.let {
-                DragHandle(
-                    onMove = it,
-                    onDragOffsetChanged = { dragOffset = it },
-                    onDraggingChanged = {
-                        isDragging = it
-                        onDraggingChanged(it)
-                    },
-                )
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(10.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(exercise.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
@@ -1901,6 +1919,7 @@ private fun ActionItemCard(
                         )
                     }
                 }
+                if (exercise.muscles.isNotEmpty()) Text(exercise.muscles.joinToString("、") { it.name }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     exerciseLine(exercise),
                     style = MaterialTheme.typography.bodySmall,
@@ -1910,8 +1929,23 @@ private fun ActionItemCard(
                     Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
             }
-            IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "编辑") }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "删除") }
+            Box {
+                IconButton(onClick = { showActions = true }) { Icon(Icons.Filled.MoreVert, "动作操作") }
+                DropdownMenu(showActions, { showActions = false }) {
+                    DropdownMenuItem(text = { Text("编辑") }, onClick = { showActions = false; onEdit() })
+                    DropdownMenuItem(text = { Text("删除") }, onClick = { showActions = false; onDelete() })
+                }
+            }
+            onMove?.let {
+                DragHandle(
+                    onMove = it,
+                    onDragOffsetChanged = { dragOffset = it },
+                    onDraggingChanged = {
+                        isDragging = it
+                        onDraggingChanged(it)
+                    },
+                )
+            }
         }
     }
 }

@@ -30,7 +30,7 @@ internal fun bodySummary(body: BodyData, record: BodyDayRecord): String = body.m
 internal fun BodyDaySummary(data: BodyData?, date: LocalDate, loaded: Boolean, onOpen: () -> Unit) {
     val body = data ?: BodyData()
     val record = body.records.find { it.date == date.toString() }
-    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(20.dp)) {
+    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("身体数据", style = MaterialTheme.typography.titleSmall)

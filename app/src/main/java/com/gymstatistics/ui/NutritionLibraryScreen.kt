@@ -1,6 +1,7 @@
 package com.gymstatistics.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,22 +47,31 @@ internal enum class NutritionBrand(val label: String) {
     MCDONALDS("麦当劳"), LAOXIANGJI("老乡鸡"), LAWSON("罗森")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun NutritionBrandButtons(current: NutritionBrand, onSelect: (NutritionBrand) -> Unit) {
-    NutritionBrand.entries.filter { it != current }.forEach { brand ->
-        TextButton(onClick = { onSelect(brand) }) { Text(brand.label) }
+internal fun NutritionScreenHeader(current: NutritionBrand, onBack: () -> Unit, onSelect: (NutritionBrand) -> Unit, onSource: () -> Unit) {
+    Column {
+        TopAppBar(title = { Text("营养库", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") } },
+            actions = { TextButton(onClick = onSource) { Text("来源") } })
+        PrimaryTabRow(selectedTabIndex = current.ordinal, containerColor = MaterialTheme.colorScheme.surface) {
+            NutritionBrand.entries.forEach { brand -> Tab(selected = brand == current, onClick = { onSelect(brand) }, text = { Text(brand.label) }) }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NutritionLibraryScreen(onBack: () -> Unit) {
+    GymDesignTheme {
     var brand by rememberSaveable { mutableStateOf(NutritionBrand.MCDONALDS) }
     val stateHolder = rememberSaveableStateHolder()
     stateHolder.SaveableStateProvider(brand.name) {
         if (brand == NutritionBrand.MCDONALDS) McDonaldsNutritionScreen(onBack) { brand = it }
         else WeightNutritionScreen(brand, onBack) { brand = it }
     }
+}
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,16 +91,7 @@ private fun McDonaldsNutritionScreen(onBack: () -> Unit, onSelectBrand: (Nutriti
     }
     var showSource by rememberSaveable { mutableStateOf(false) }
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("麦当劳营养库", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") } },
-                actions = {
-                    NutritionBrandButtons(NutritionBrand.MCDONALDS, onSelectBrand)
-                    if (result?.isSuccess == true) TextButton(onClick = { showSource = true }) { Text("来源") }
-                },
-            )
-        },
+        topBar = { NutritionScreenHeader(NutritionBrand.MCDONALDS, onBack, onSelectBrand) { showSource = true } },
     ) { padding ->
         val catalog = result?.getOrNull()?.first
         if (catalog != null) {
@@ -143,11 +144,7 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, initialFavorites:
         portions = NutritionCalculator.setQuantity(latest, productId, variantId, quantity)
     }
     Column(modifier.fillMaxSize()) {
-        OutlinedTextField(
-            query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            label = { Text("搜索餐品") }, singleLine = true,
-            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-        )
+        NutritionSearchField(query, { query = it }, "搜索餐品")
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(category == null && !favoritesOnly, { categoryId = null; favoritesOnly = false }, label = { Text("全部") })
             FilterChip(favoritesOnly, { categoryId = null; favoritesOnly = true }, label = { Text("收藏") }, leadingIcon = { Icon(Icons.Rounded.Star, null, Modifier.size(18.dp)) })
@@ -172,25 +169,17 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, initialFavorites:
                             } finally { favoriteBusy = false }
                         }
                     }
-                }) { variant ->
-                    change(product.id, variant.id) { it + 1 }
+                }) { variant, quantity ->
+                    change(product.id, variant.id) { it + quantity }
                 }
             }
         }
-        Surface(tonalElevation = 3.dp) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (totals.itemCount == 0) "尚未选择餐品" else "已选 ${totals.itemCount} 项，${nutritionNumber(totals.portions)} 份", style = MaterialTheme.typography.titleSmall)
-                    Text("≈${nutritionNumber(totals.nutrition.energyKcal, true)} kcal", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                }
-                with(totals.nutrition) {
-                    Text("蛋白质 ${nutritionNumber(proteinG)} g，脂肪 ${nutritionNumber(fatG)} g，碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall)
-                    Text("${nutritionNumber(energyKj)} kJ，钠 ${nutritionNumber(sodiumMg)} mg，钙 ${nutritionNumber(calciumMg)} mg", style = MaterialTheme.typography.bodySmall)
-                }
-                FilledTonalButton(onClick = { showCart = true }, enabled = totals.itemCount > 0, modifier = Modifier.fillMaxWidth()) { Text("查看已选") }
-            }
-        }
+        NutritionCartBar(
+            if (totals.itemCount == 0) "尚未选择餐品" else "已选 ${totals.itemCount} 项，${nutritionNumber(totals.portions)} 份",
+            "≈${nutritionNumber(totals.nutrition.energyKcal, true)} kcal", totals.itemCount > 0, { showCart = true },
+        )
     }
+
     if (showCart) {
         ModalBottomSheet(onDismissRequest = { showCart = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -228,42 +217,41 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, initialFavorites:
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NutritionProductCard(product: NutritionProduct, favorite: Boolean, favoriteEnabled: Boolean, onFavorite: () -> Unit, onAdd: (NutritionVariant) -> Unit) {
+private fun NutritionProductCard(product: NutritionProduct, favorite: Boolean, favoriteEnabled: Boolean, onFavorite: () -> Unit, onAdd: (NutritionVariant, Double) -> Unit) {
     var selectedId by rememberSaveable(product.id) { mutableStateOf(product.variants.first().id) }
+    var editing by rememberSaveable(product.id) { mutableStateOf(false) }
+    var quantityText by rememberSaveable(product.id) { mutableStateOf("1") }
     var expanded by remember { mutableStateOf(false) }
     val variant = product.variants.firstOrNull { it.id == selectedId } ?: product.variants.first()
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NutritionProductImage(product)
-                Spacer(Modifier.width(12.dp))
-                Text(product.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                IconButton(onClick = onFavorite, enabled = favoriteEnabled) {
-                    Icon(if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                        (if (favorite) "取消收藏" else "收藏") + product.name,
-                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    NutritionItemRow(product.name, if (product.variants.size > 1) "多种规格可选" else variant.name,
+        "≈${nutritionNumber(variant.perServing.energyKcal, true)} kcal / 份", favorite, favoriteEnabled, onFavorite,
+        onAdd = { editing = true }, image = { NutritionProductImage(product, 72.dp) }, addDescription = "添加${product.name}")
+    if (editing) ModalBottomSheet(onDismissRequest = { editing = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(product.name, style = MaterialTheme.typography.headlineSmall)
+            Box {
+                TextButton(onClick = { expanded = true }, enabled = product.variants.size > 1) {
+                    Text(variant.name)
+                    if (product.variants.size > 1) Icon(Icons.Rounded.ExpandMore, "选择${product.name}规格")
+                }
+                DropdownMenu(expanded, { expanded = false }) {
+                    product.variants.forEach { entry -> DropdownMenuItem(text = { Text(entry.name) }, onClick = { selectedId = entry.id; expanded = false }) }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("≈${nutritionNumber(variant.perServing.energyKcal, true)} kcal / 份", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Box {
-                    OutlinedButton(onClick = { expanded = true }, enabled = product.variants.size > 1) {
-                        Text(variant.name)
-                        if (product.variants.size > 1) Icon(Icons.Rounded.ExpandMore, contentDescription = "选择${product.name}规格")
-                    }
-                    DropdownMenu(expanded, { expanded = false }) {
-                        product.variants.forEach { entry -> DropdownMenuItem(text = { Text(entry.name) }, onClick = { selectedId = entry.id; expanded = false }) }
-                    }
-                }
-            }
-            with(variant.perServing) { Text("蛋白质 ${nutritionNumber(proteinG)} g，脂肪 ${nutritionNumber(fatG)} g，碳水 ${nutritionNumber(carbohydrateG)} g", style = MaterialTheme.typography.bodySmall) }
+            val quantity = quantityText.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 && it <= NutritionCalculator.MAX_QUANTITY }
+            TextField(quantityText, { quantityText = it }, Modifier.fillMaxWidth(), label = { Text("食用份数") }, singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal), isError = quantity == null,
+                supportingText = { if (quantity == null) Text("请输入大于0且不超过99的份数") })
+            val amount = quantity ?: 0.0
+            val nutrition = variant.perServing.let { n -> ServingNutrition(n.energyKj?.times(amount), n.proteinG?.times(amount), n.fatG?.times(amount), n.carbohydrateG?.times(amount), n.sodiumMg?.times(amount), n.calciumMg?.times(amount)) }
+            Text("≈${nutritionNumber(nutrition.energyKcal, true)} kcal", style = MaterialTheme.typography.headlineMedium)
+            NutritionTotalsGrid(nutrition)
             val note = variant.note.ifBlank { product.note }
-            if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FilledTonalButton(onClick = { onAdd(variant) }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Add, "添加${product.name}（${variant.name}）", Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp)); Text("添加")
-            }
+            if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { if (quantity != null) { onAdd(variant, quantity); editing = false } }, enabled = quantity != null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(14.dp)) { Text("加入配餐") }
         }
     }
 }

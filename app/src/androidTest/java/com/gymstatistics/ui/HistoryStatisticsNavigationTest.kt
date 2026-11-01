@@ -1,6 +1,7 @@
 package com.gymstatistics.ui
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.app.Application
 import androidx.activity.compose.setContent
 import androidx.compose.ui.semantics.Role
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -98,6 +100,30 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("排序：时间").assertIsDisplayed()
         compose.onNodeWithText("数据趋势", substring = true).assertDoesNotExist()
         compose.onNodeWithText("总个数趋势", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun homeRowsAndTheirMenuStillEditAndDelete() {
+        compose.onNodeWithText("测试A卧推").assertIsDisplayed()
+        instrumentation.uiAutomation.waitForIdle(500, 5_000)
+        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        try {
+            File(instrumentation.targetContext.cacheDir, "gym-home-workouts.png").outputStream().use {
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        } finally { bitmap.recycle() }
+        compose.onNodeWithText("测试A卧推").performClick()
+        compose.onNodeWithText("编辑动作").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onAllNodesWithContentDescription("动作操作")[0].performClick()
+        compose.onNodeWithText("编辑").performClick()
+        compose.onNodeWithText("编辑动作").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onAllNodesWithContentDescription("动作操作")[0].performClick()
+        compose.onNodeWithText("删除").performClick()
+        compose.onNodeWithText("删除动作").assertIsDisplayed()
+        compose.onNodeWithText("删除").performClick()
+        compose.onNodeWithText("测试A卧推").assertDoesNotExist()
+        compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
     }
 
     @Test fun openingAnotherActionDoesNotKeepThePreviousSelection() {
