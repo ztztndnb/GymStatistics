@@ -86,8 +86,8 @@ test("dragged plan and manual actions use opaque rounded card backgrounds", () =
 test("plan action row keeps drag, edit and delete but no move arrows", () => {
   const planRow = gymAppSource.split("private fun PlanDayExerciseRow(")[1].split("private class PlannedExerciseDraft")[0];
   assert.match(planRow, /DragHandle\(/);
-  assert.match(planRow, /contentDescription = "编辑计划动作"/);
-  assert.match(planRow, /contentDescription = "删除计划动作"/);
+  assert.match(planRow, /Text\("编辑计划动作"\)/);
+  assert.match(planRow, /Text\("删除计划动作"\)/);
   assert.doesNotMatch(planRow, /contentDescription = "(?:上移|下移)"/);
 });
 
@@ -146,7 +146,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 63/);
-  assert.match(buildSource, /versionName = "1\.3\.15"/);
-  assert.match(readmeSource, /GymStatistics 1\.3\.15\.apk/);
+  assert.match(buildSource, /versionCode = 64/);
+  assert.match(buildSource, /versionName = "1\.4\.1"/);
+  assert.match(readmeSource, /GymStatistics 1\.4\.1\.apk/);
 });

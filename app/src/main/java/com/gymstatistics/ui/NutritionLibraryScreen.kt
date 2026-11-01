@@ -144,7 +144,7 @@ private fun NutritionCatalogContent(catalog: NutritionCatalog, initialFavorites:
         portions = NutritionCalculator.setQuantity(latest, productId, variantId, quantity)
     }
     Column(modifier.fillMaxSize()) {
-        NutritionSearchField(query, { query = it }, "搜索餐品")
+        GymSearchField(query, { query = it }, "搜索餐品")
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(category == null && !favoritesOnly, { categoryId = null; favoritesOnly = false }, label = { Text("全部") })
             FilterChip(favoritesOnly, { categoryId = null; favoritesOnly = true }, label = { Text("收藏") }, leadingIcon = { Icon(Icons.Rounded.Star, null, Modifier.size(18.dp)) })

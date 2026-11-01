@@ -6,15 +6,17 @@
   <title>锻炼肌群演示</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; color: #2c2630; background: #fffaff; font: 16px system-ui, sans-serif; }
+    :root { --background: #fff; --surface: #f1f1f3; --text: #28272c; --muted: #716f78; --primary: #7553aa; --onPrimary: #fff; --border: #e5e3e9; --fill: #a2a0a8; }
+    body { height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; margin: 0; color: var(--text); background: var(--background); font: 16px system-ui, sans-serif; }
     .tabs { display: flex; gap: 8px; padding: 12px 12px 4px; }
-    button { border: 1px solid #d2bddc; border-radius: 18px; background: #fffaff; color: #4b3155; padding: 8px 14px; font: inherit; }
-    button.active { background: #7045ad; border-color: #7045ad; color: white; }
-    #hint { padding: 0 14px 8px; color: #5d5262; font-size: 14px; }
-    #body-map { height: calc(100vh - 156px); min-height: 620px; padding: 0 8px; overflow: hidden; touch-action: none; }
+    .tabs, #hint, #selected, #error { flex-shrink: 0; }
+    button { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); min-height: 44px; padding: 8px 18px; font: inherit; }
+    button.active { background: var(--primary); border-color: var(--primary); color: var(--onPrimary); }
+    #hint { padding: 0 14px 8px; color: var(--muted); font-size: 13px; }
+    #body-map { flex: 1; min-height: 180px; margin: 0 12px 12px; border-radius: 16px; background: var(--surface); padding: 12px 8px; overflow: hidden; touch-action: none; }
     #body-map svg { transform-origin: center center; touch-action: none; user-select: none; }
-    #selected { padding: 8px 14px 16px; color: #5d5262; font-size: 14px; }
-    #selected strong { color: #7045ad; }
+    #selected { max-height: 90px; overflow: auto; padding: 8px 14px 12px; color: var(--muted); font-size: 14px; }
+    #selected strong { color: var(--primary); }
     #error { padding: 0 14px 8px; color: #b3261e; font-size: 13px; }
   </style>
 </head>
@@ -124,7 +126,17 @@
       render();
     }
 
+    function setPickerColors(colors) {
+      Object.keys(colors).forEach(key => {
+        if (['background', 'surface', 'text', 'muted', 'primary', 'onPrimary', 'border', 'fill'].includes(key)) {
+          document.documentElement.style.setProperty(`--${key}`, colors[key]);
+        }
+      });
+      render();
+    }
+
     function render() {
+      const focusedId = document.activeElement?.getAttribute('data-muscle-id');
       const muscles = view === BodyMuscles.ViewSide.FRONT
         ? BodyMuscles.FRONT_MUSCLES
         : BodyMuscles.BACK_MUSCLES;
@@ -136,17 +148,29 @@
       muscles.forEach(muscle => {
         const path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', muscle.path);
-        path.setAttribute('fill', selected.has(muscle.id) ? '#7045ad' : '#a9b9ca');
-        path.setAttribute('stroke', '#ffffff');
+        path.setAttribute('fill', selected.has(muscle.id) ? 'var(--primary)' : 'var(--fill)');
+        path.setAttribute('stroke', 'var(--surface)');
+        path.dataset.muscleId = muscle.id;
+        path.setAttribute('role', 'button');
+        path.setAttribute('tabindex', '0');
+        path.setAttribute('aria-label', MUSCLE_NAMES[muscle.id]);
+        path.setAttribute('aria-pressed', String(selected.has(muscle.id)));
         path.setAttribute('stroke-width', '0.12');
         path.style.cursor = 'pointer';
         path.addEventListener('click', () => {
           selected.has(muscle.id) ? selected.delete(muscle.id) : selected.add(muscle.id);
           render();
         });
+        path.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            path.dispatchEvent(new MouseEvent('click'));
+          }
+        });
         svg.appendChild(path);
       });
       map.replaceChildren(svg);
+      if (focusedId) map.querySelector(`[data-muscle-id="${focusedId}"]`)?.focus({ preventScroll: true });
       applyMapTransform();
       updateSelectedText();
       notifySelection();

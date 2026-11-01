@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,12 +70,12 @@ internal fun StatisticsScreen(
     LaunchedEffect(requestedAction) {
         if (requestedAction != null) listState.scrollToItem(4)
     }
-    Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text("统计", fontWeight = FontWeight.SemiBold) }) }) { padding ->
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             item(key = "overview") { StatisticsOverviewGrid(statistics.overview) }
             item(key = "activity") { TrainingActivityCard(statistics, onOpenDate) }
@@ -101,21 +103,17 @@ private fun StatisticsOverviewGrid(overview: StatisticsOverview) {
         Triple("连续训练", overview.consecutiveWeeks.toString(), "周"),
         Triple("动作记录", overview.actionRecords.toString(), "条"),
     )
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        tiles.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { (label, value, unit) ->
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        shape = RoundedCornerShape(20.dp),
-                    ) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    StatisticsCard("训练概览") {
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            tiles.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    row.forEach { (label, value, unit) ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(value, style = MaterialTheme.typography.headlineMedium)
-                                Text(unit, Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.bodyMedium)
+                                Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                                Text(unit, Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -127,26 +125,22 @@ private fun StatisticsOverviewGrid(overview: StatisticsOverview) {
 
 @Composable
 private fun StatisticsCard(title: String, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    Column(
+        Modifier.fillMaxWidth().animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            content()
         }
+        content()
+        HorizontalDivider(Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
 @Composable
 private fun StatisticsOptions(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        options.forEachIndexed { index, label ->
-            FilterChip(selected = index == selected, onClick = { onSelect(index) }, label = { Text(label) })
-        }
-    }
+    GymOptionRow(options, selected, onSelect)
 }
 
 @Composable
@@ -376,9 +370,15 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
     val metricUnit = when (metric) { ProgressMetric.VALUE -> unit.ifEmpty { "无单位" }; ProgressMetric.TOTAL_COUNT -> "个"; ProgressMetric.SETS -> "组"; ProgressMetric.COEFFICIENT -> if (unit.isEmpty()) "系数" else "$unit×次" }
     StatisticsCard("动作进步", "每个训练日取所选指标最高值，不同单位分开查看。") {
         if (action == null) Text("记录第一个动作后，这里会显示训练曲线。", style = MaterialTheme.typography.bodyMedium) else {
-            OutlinedButton(onClick = { query = ""; showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { query = ""; showPicker = true }, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            ) {
                 Icon(Icons.Rounded.Search, contentDescription = null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                Text(action, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(action, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.ExpandMore, contentDescription = null, Modifier.size(20.dp))
             }
             if (units.size > 1) StatisticsOptions(units.map { it.ifEmpty { "无单位" } }, units.indexOf(unit)) { chosenUnit = units[it] }
             StatisticsOptions(ProgressMetric.entries.map { it.label }, metricIndex) { metricIndex = it }
@@ -389,8 +389,8 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
             }
             if (points.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column { Text("范围内最佳", style = MaterialTheme.typography.labelMedium); Text("${statisticsNumber(points.maxOf { it.value })} $metricUnit", style = MaterialTheme.typography.titleMedium) }
-                    Column(horizontalAlignment = Alignment.End) { Text("最近一次", style = MaterialTheme.typography.labelMedium); Text("${statisticsNumber(points.last().value)} $metricUnit", style = MaterialTheme.typography.titleMedium) }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("范围内最佳", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${statisticsNumber(points.maxOf { it.value })} $metricUnit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("最近一次", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${statisticsNumber(points.last().value)} $metricUnit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
                 }
                 Text("${points.size} 个训练日，最近记录 ${points.last().date}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -402,7 +402,7 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
             onDismissRequest = { showPicker = false }, title = { Text("选择动作") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("搜索动作或肌群") }, singleLine = true)
+                    GymSearchField(query, { query = it }, "搜索动作或肌群", modifier = Modifier.fillMaxWidth())
                     val matching = actions.filter { name -> name.contains(query, true) || statistics.days.any { day -> day.exercises.any { it.name == name && it.muscles.any { muscle -> muscle.name.contains(query, true) } } } }
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
                         if (matching.isEmpty()) item { Text("没有匹配的动作") }
@@ -432,8 +432,8 @@ private fun StatisticsLineChart(points: List<ProgressPoint>, unit: String) {
         Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.height(160.dp).widthIn(min = 36.dp), verticalArrangement = if (max == min) Arrangement.Center else Arrangement.SpaceBetween) {
-                Text(statisticsNumber(max), style = MaterialTheme.typography.labelSmall)
-                if (max != min) Text(statisticsNumber(min), style = MaterialTheme.typography.labelSmall)
+                Text(statisticsNumber(max), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (max != min) Text(statisticsNumber(min), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Canvas(Modifier.weight(1f).height(160.dp).semantics { contentDescription = "${points.size}个训练日，最低${statisticsNumber(min)}，最高${statisticsNumber(max)} $unit" }) {
                 val inset = 6.dp.toPx()
@@ -454,8 +454,8 @@ private fun StatisticsLineChart(points: List<ProgressPoint>, unit: String) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(shortStatisticsDate(points.first().date), style = MaterialTheme.typography.labelSmall)
-            if (points.size > 1) Text(shortStatisticsDate(points.last().date), style = MaterialTheme.typography.labelSmall)
+            Text(shortStatisticsDate(points.first().date), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (points.size > 1) Text(shortStatisticsDate(points.last().date), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -466,13 +466,16 @@ private fun RecentTrainingCard(days: List<TrainingDay>, onOpenDate: (LocalDate) 
         if (days.isEmpty()) Text("还没有训练记录，去首页记下第一次训练吧。", style = MaterialTheme.typography.bodyMedium)
         days.forEachIndexed { index, day ->
             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth().clickable { onOpenDate(day.date) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable { onOpenDate(day.date) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(day.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日")), style = MaterialTheme.typography.titleSmall)
-                    Text("${day.exercises.size}条动作，${day.sets}组", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    Text(day.exercises.map { it.name }.distinct().joinToString("、"), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(day.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日")), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(day.exercises.map { it.name }.distinct().joinToString("、"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, "查看当天记录", Modifier.size(20.dp))
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${day.exercises.size}条动作", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("${day.sets}组", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, "查看当天记录", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

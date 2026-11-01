@@ -1,10 +1,10 @@
 package com.gymstatistics.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,8 +14,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gymstatistics.data.*
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -54,34 +59,43 @@ internal fun BodyChangesCard(body: BodyData?, today: LocalDate) {
     var menu by remember { mutableStateOf(false) }
     val points = remember(data, metric, range, today) { bodyPoints(data, metric?.id.orEmpty(), listOf(30, 90, null)[range], today) }
     val all = remember(data, metric, today) { bodyPoints(data, metric?.id.orEmpty(), null, today) }
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("身体变化", style = MaterialTheme.typography.titleMedium)
-            Text("按实际测量日期展示；未记录日期不补零。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Box {
-                OutlinedButton(onClick = { menu = true }) { Text(metric?.let { "${it.name}（${it.unit}）" } ?: "选择指标") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    data.metrics.forEach { option ->
-                        DropdownMenuItem(text = { Text("${option.name}（${option.unit}）" + if (option.enabled) "" else "（已停用）") }, onClick = { metricId = option.id; menu = false })
-                    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("身体变化", style = MaterialTheme.typography.titleMedium)
+        Text("按实际测量日期展示；未记录日期不补零。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box {
+            FilledTonalButton(
+                onClick = { menu = true },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.onSurface),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text(metric?.let { "${it.name}（${it.unit}）" } ?: "选择指标", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                data.metrics.forEach { option ->
+                    DropdownMenuItem(text = { Text("${option.name}（${option.unit}）" + if (option.enabled) "" else "（已停用）") }, onClick = { metricId = option.id; menu = false })
                 }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("近30天", "近90天", "全部").forEachIndexed { index, label ->
-                    FilterChip(selected = range == index, onClick = { range = index }, label = { Text(label) })
-                }
-            }
-            val latest = all.lastOrNull()
-            if (latest != null) {
-                Text("最新 ${bodyNumber(latest.value)} ${metric?.unit.orEmpty()}（${latest.date}）", style = MaterialTheme.typography.titleMedium)
-                val previous = all.dropLast(1).lastOrNull()
-                Text(if (previous == null) "尚无上次测量可比较" else {
-                    val difference = BigDecimal.valueOf(latest.value).subtract(BigDecimal.valueOf(previous.value))
-                    "较上次（${previous.date}） ${if (difference.signum() > 0) "+" else ""}${difference.stripTrailingZeros().toPlainString()} ${metric?.unit.orEmpty()}"
-                }, style = MaterialTheme.typography.bodySmall)
-            }
-            BodyTrendChart(points, metric?.unit.orEmpty())
         }
+        val latest = all.lastOrNull()
+        if (latest != null) {
+            Text(buildAnnotatedString {
+                append("最新 ")
+                withStyle(SpanStyle(fontSize = 38.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                    append(bodyNumber(latest.value))
+                }
+                append(" ${metric?.unit.orEmpty()}（${latest.date}）")
+            }, style = MaterialTheme.typography.bodySmall.copy(lineHeight = 46.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val previous = all.dropLast(1).lastOrNull()
+            Text(if (previous == null) "尚无上次测量可比较" else {
+                val difference = BigDecimal.valueOf(latest.value).subtract(BigDecimal.valueOf(previous.value))
+                "较上次（${previous.date}） ${if (difference.signum() > 0) "+" else ""}${difference.stripTrailingZeros().toPlainString()} ${metric?.unit.orEmpty()}"
+            }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        GymOptionRow(options = listOf("近30天", "近90天", "全部"), selected = range, onSelect = { range = it })
+        BodyTrendChart(points, metric?.unit.orEmpty())
     }
 }
 

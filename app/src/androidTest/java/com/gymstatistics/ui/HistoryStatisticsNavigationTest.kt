@@ -3,6 +3,11 @@ package com.gymstatistics.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import android.app.Application
+import android.os.SystemClock
+import android.view.View
+import android.view.ViewGroup
+import android.view.inspector.WindowInspector
+import android.webkit.WebView
 import androidx.activity.compose.setContent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -29,6 +34,9 @@ import com.gymstatistics.data.ExerciseRecord
 import java.time.LocalDate
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
@@ -36,6 +44,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 
 /** Exercises the real app navigation and ViewModel using emulator-only training fixtures. */
@@ -145,6 +155,130 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("测试未来动作").assertIsDisplayed()
         compose.onNodeWithText("这段时间没有该指标的有效记录").assertIsDisplayed()
         compose.onNodeWithText("测试A卧推").assertDoesNotExist()
+    }
+
+    @Test fun historyPlanSelectionRequiresConfirmationAndKeepsItsData() {
+        compose.onNodeWithText("计划").performClick()
+        compose.onNodeWithText("从历史动作选择").performScrollTo().performClick()
+        compose.onNodeWithText("搜索动作或肌群").performTextReplacement("测试Z深蹲")
+        compose.onNode(hasText("测试Z深蹲") and !hasSetTextAction()).performClick()
+        compose.onNodeWithText("添加计划动作").assertIsDisplayed()
+        assertTrue(model.uiState.data.trainingPlan?.days.orEmpty().all { it.exercises.isEmpty() })
+        compose.onNodeWithText("取消").performClick()
+        assertTrue(model.uiState.data.trainingPlan?.days.orEmpty().all { it.exercises.isEmpty() })
+        compose.onNodeWithText("从历史动作选择").performScrollTo().performClick()
+        compose.onNodeWithText("搜索动作或肌群").performTextReplacement("测试Z深蹲")
+        compose.onNode(hasText("测试Z深蹲") and !hasSetTextAction()).performClick()
+        compose.onNodeWithText("保存").performClick()
+        compose.waitUntil(5_000) { model.uiState.data.trainingPlan?.days?.first()?.exercises?.size == 1 }
+        val saved = model.uiState.data.trainingPlan!!.days.first().exercises.single()
+        assertEquals(88.0, saved.data!!, 0.0)
+        assertEquals("磅", saved.unit)
+        assertEquals(8, saved.count)
+        assertEquals(4, saved.sets)
+        screenshot("ui-plan")
+        compose.onNodeWithText("周二").performScrollTo().performClick()
+        compose.onNodeWithText("测试Z深蹲").assertDoesNotExist()
+        compose.onNodeWithText("周一").performClick()
+        compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
+        compose.onNodeWithText("动作库").performClick()
+        screenshot("ui-library")
+        compose.onNodeWithText("统计").performClick()
+        compose.onNodeWithText("训练概览").assertIsDisplayed()
+        screenshot("ui-statistics")
+        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText("添加记录").performClick()
+        compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("保存身体数据").performClick()
+        compose.waitUntil(5_000) { model.uiState.data.bodyData?.records?.isNotEmpty() == true }
+        compose.onNodeWithText("最新 65.5 kg（${LocalDate.now()}）").assertIsDisplayed()
+        screenshot("ui-body")
+    }
+
+    @Test fun muscleMapCancelDiscardsAndDoneKeepsPlanDraftFields() {
+        compose.onNodeWithText("计划").performClick()
+        compose.onNodeWithText("添加动作").performScrollTo().performClick()
+        compose.onNodeWithText("动作名称").performTextReplacement("图选测试")
+        compose.onNodeWithText("数据").performTextReplacement("25")
+        compose.onNodeWithText("个数(每组)").performTextReplacement("12")
+        compose.onNodeWithText("组数").performTextReplacement("3")
+        compose.onNodeWithText("备注").performScrollTo().performTextReplacement("保留备注")
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("选择锻炼肌群").performScrollTo().performClick()
+        awaitPicker("document.querySelectorAll('#body-map path').length", "40")
+        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').dispatchEvent(new MouseEvent('click')), selected.size)", "1")
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("已选择肌肉：", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("选择锻炼肌群").performClick()
+        awaitPicker("document.querySelectorAll('#body-map path').length", "40")
+        awaitPicker("document.querySelector('#body-map svg').getBoundingClientRect().height > 200", "true")
+        awaitPicker("(document.body.style.height='200px', document.querySelector('#body-map').getBoundingClientRect().height >= 180 && document.body.scrollHeight > document.body.clientHeight)", "true")
+        awaitPicker("(document.body.style.height='', document.querySelector('#body-map svg').getBoundingClientRect().height > 200)", "true")
+        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').dispatchEvent(new MouseEvent('click')), selected.size)", "1")
+        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').focus(), document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'})), selected.size === 0 && document.activeElement.dataset.muscleId === 'biceps-left')", "true")
+        awaitPicker("(document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:' '})), selected.size === 1 && document.activeElement.dataset.muscleId === 'biceps-left')", "true")
+        awaitPicker("(document.querySelector('[data-view=back]').click(), document.querySelectorAll('#body-map path').length)", "49")
+        awaitPicker("(document.querySelector('[data-view=front]').click(), document.querySelector('[data-muscle-id=\"biceps-left\"]').getAttribute('aria-pressed'))", "\"true\"")
+        screenshot("ui-muscle-picker")
+        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("已选择肌肉：左侧肱二头肌").assertIsDisplayed()
+        compose.onNodeWithText("保存").performClick()
+        compose.waitUntil(5_000) { model.uiState.data.trainingPlan?.days?.first()?.exercises?.size == 1 }
+        val saved = model.uiState.data.trainingPlan!!.days.first().exercises.single()
+        assertEquals("图选测试", saved.name)
+        assertEquals(25.0, saved.data!!, 0.0)
+        assertEquals("磅", saved.unit)
+        assertEquals(12, saved.count)
+        assertEquals(3, saved.sets)
+        assertEquals("保留备注", saved.note)
+        assertEquals(listOf("biceps-left"), saved.muscles.map { it.id })
+    }
+
+    private fun screenshot(name: String) {
+        // A target screen can enter semantics before its slide transition is drawn.
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        val frameReady = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            activity.window.decorView.postOnAnimation {
+                activity.window.decorView.postOnAnimation { frameReady.countDown() }
+            }
+        }
+        check(frameReady.await(5, TimeUnit.SECONDS))
+        instrumentation.uiAutomation.waitForIdle(500, 5_000)
+        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        try {
+            File(instrumentation.targetContext.cacheDir, "$name.png").outputStream().use {
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        } finally { bitmap.recycle() }
+    }
+
+    private fun findWebView(view: View): WebView? {
+        if (view is WebView) return view
+        if (view is ViewGroup) for (i in 0 until view.childCount) findWebView(view.getChildAt(i))?.let { return it }
+        return null
+    }
+
+    private fun awaitPicker(script: String, expected: String) {
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        var last = ""
+        while (SystemClock.uptimeMillis() < deadline) {
+            compose.waitForIdle()
+            val latch = CountDownLatch(1)
+            val result = AtomicReference("")
+            instrumentation.runOnMainSync {
+                val webView = WindowInspector.getGlobalWindowViews().firstNotNullOfOrNull { findWebView(it) }
+                if (webView == null) latch.countDown()
+                else webView.evaluateJavascript("(function(){try{return ($script)}catch(e){return null}})()") { result.set(it); latch.countDown() }
+            }
+            check(latch.await(5, TimeUnit.SECONDS))
+            last = result.get()
+            if (last == expected) return
+            SystemClock.sleep(100)
+        }
+        error("Picker condition failed: $script, expected $expected, actual $last")
     }
 
     private fun openDetail(name: String) {

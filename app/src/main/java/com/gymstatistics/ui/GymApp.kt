@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,7 +81,10 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -93,6 +97,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +109,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,8 +120,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -140,6 +150,7 @@ import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONObject
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionRecordSort
@@ -210,7 +221,7 @@ fun GymApp(viewModel: GymViewModel) {
     val settleOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    GymDesignTheme(enabled = screen == Screen.MAIN || screen == Screen.NUTRITION) {
+    GymDesignTheme(enabled = screen in setOf(Screen.MAIN, Screen.PLAN, Screen.BODY, Screen.BODY_EDITOR, Screen.STATS, Screen.HISTORY, Screen.NUTRITION)) {
     Scaffold(
         bottomBar = {
             if (navigation.showBottomNavigation) {
@@ -1188,6 +1199,8 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
     val plan = state.data.trainingPlan ?: TrainingPlan()
     var editing by remember { mutableStateOf<Pair<Int, PlannedExercise?>?>(null) }
     var historyPickerDay by remember { mutableStateOf<Int?>(null) }
+    var expandedWeekday by rememberSaveable { mutableStateOf(1) }
+    var editingExisting by remember { mutableStateOf(false) }
 
     BackHandler { onBack() }
     Scaffold(
@@ -1197,23 +1210,30 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 12.dp)) {
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
             item {
                 Text(
-                    "每周计划会重复使用；在主界面切换到计划模式后，可逐项完成并记录。",
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+                    "每周循环，周一至周日；在首页计划模式中逐项完成并记录。",
+                    modifier = Modifier.padding(vertical = 10.dp),
                     color = MaterialTheme.colorScheme.outline,
                     fontSize = 13.sp,
                 )
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("一周安排", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("${plan.days.count { !it.restDay && it.exercises.isNotEmpty() }} 个训练日",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             items((1..7).toList(), key = { it }) { weekday ->
                 val day = plan.days.firstOrNull { it.weekday == weekday } ?: TrainingPlanDay(weekday)
                 PlanDayEditor(
                     day = day,
+                    expanded = expandedWeekday == weekday,
+                    onToggle = { expandedWeekday = if (expandedWeekday == weekday) 0 else weekday },
                     onRestDayChange = { viewModel.setPlanRestDay(weekday, it) },
-                    onAdd = { editing = weekday to null },
+                    onAdd = { editingExisting = false; editing = weekday to null },
                     onAddFromHistory = { historyPickerDay = weekday },
-                    onEdit = { editing = weekday to it },
+                    onEdit = { editingExisting = true; editing = weekday to it },
                     onDelete = { viewModel.deletePlannedExercise(weekday, it) },
                     onMove = { id, direction -> viewModel.reorderPlannedExercises(weekday, id, direction) },
                     onCopyNext = { viewModel.copyTrainingPlanDay(weekday, if (weekday == 7) 1 else weekday + 1) },
@@ -1226,9 +1246,10 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
     editing?.let { (weekday, initial) ->
         PlannedExerciseEditorDialog(
             initial = initial,
+            isEditing = editingExisting,
             onDismiss = { editing = null },
             onConfirm = { exercise ->
-                if (initial == null) viewModel.addPlannedExercise(weekday, exercise)
+                if (!editingExisting) viewModel.addPlannedExercise(weekday, exercise)
                 else viewModel.updatePlannedExercise(weekday, exercise)
                 editing = null
             },
@@ -1240,7 +1261,8 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
             sessions = state.data.sessions,
             onDismiss = { historyPickerDay = null },
             onPick = { exercise ->
-                viewModel.addPlannedExercise(weekday, exercise)
+                editingExisting = false
+                editing = weekday to exercise
                 historyPickerDay = null
             },
         )
@@ -1250,6 +1272,8 @@ private fun TrainingPlanPage(viewModel: GymViewModel, onBack: () -> Unit) {
 @Composable
 private fun PlanDayEditor(
     day: TrainingPlanDay,
+    expanded: Boolean,
+    onToggle: () -> Unit,
     onRestDayChange: (Boolean) -> Unit,
     onAdd: () -> Unit,
     onAddFromHistory: () -> Unit,
@@ -1258,15 +1282,24 @@ private fun PlanDayEditor(
     onMove: (String, Int) -> Unit,
     onCopyNext: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        Column(modifier = Modifier.padding(10.dp)) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(12.dp), color = if (expanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Text(weekdayLabels[day.weekday - 1], fontWeight = FontWeight.SemiBold) }
+            }
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Text(planWeekdayLabel(day.weekday), fontWeight = FontWeight.SemiBold)
+                Text(if (day.restDay) "休息日" else "${day.exercises.size} 个动作，${day.exercises.sumOf { (it.sets ?: 1).toLong() }} 组",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (expanded) "收起当天计划" else "展开当天计划")
+        }
+        AnimatedVisibility(expanded, enter = expandVertically(), exit = shrinkVertically()) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(planWeekdayLabel(day.weekday), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(if (day.restDay) "动作保留，休息日不执行" else "按下方顺序安排训练", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("休息日", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 Switch(checked = day.restDay, onCheckedChange = onRestDayChange)
-            }
-            if (day.restDay) {
-                Text("当天不安排计划动作", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
             day.exercises.forEachIndexed { index, exercise ->
                 key(exercise.id) {
@@ -1280,14 +1313,16 @@ private fun PlanDayEditor(
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onAdd, modifier = Modifier.weight(1f)) { Text("添加动作") }
-                OutlinedButton(onClick = onAddFromHistory, modifier = Modifier.weight(1f)) { Text("从历史动作选择") }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Button(onClick = onAdd, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) { Text("添加动作") }
+                TextButton(onClick = onAddFromHistory, modifier = Modifier.fillMaxWidth()) { Text("从历史动作选择") }
             }
             TextButton(onClick = onCopyNext, modifier = Modifier.fillMaxWidth()) {
                 Text("复制到${planWeekdayLabel(if (day.weekday == 7) 1 else day.weekday + 1)}")
             }
         }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -1300,6 +1335,7 @@ private fun PlanDayExerciseRow(
     onEdit: (PlannedExercise) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    var showMenu by remember(exercise.id) { mutableStateOf(false) }
     var isDragging by remember(exercise.id) { mutableStateOf(false) }
     var dragOffset by remember(exercise.id) { mutableFloatStateOf(0f) }
     val scale by animateFloatAsState(
@@ -1313,7 +1349,8 @@ private fun PlanDayExerciseRow(
         label = "plan-drag-elevation",
     )
     val dragBackground = if (isDragging) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 1f) else Color.Transparent
-    val rowHeightPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val defaultRowHeightPx = with(LocalDensity.current) { 64.dp.toPx() }
+    var rowHeightPx by remember { mutableFloatStateOf(defaultRowHeightPx) }
     val placementOffset = remember(exercise.id) { Animatable(0f) }
     var previousIndex by remember(exercise.id) { mutableStateOf(index) }
     LaunchedEffect(index) {
@@ -1328,6 +1365,8 @@ private fun PlanDayExerciseRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .onSizeChanged { rowHeightPx = it.height.toFloat() }
             .zIndex(if (isDragging) 1f else 0f)
             .graphicsLayer {
                 scaleX = scale
@@ -1339,25 +1378,27 @@ private fun PlanDayExerciseRow(
             }
             .background(dragBackground),
     ) {
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(10.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp).clickable { onEdit(exercise) }) {
+            Text(exercise.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(exerciseLine(exercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box {
+            IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.MoreVert, "计划动作操作") }
+            DropdownMenu(showMenu, { showMenu = false }) {
+                DropdownMenuItem(text = { Text("编辑计划动作") }, onClick = { showMenu = false; onEdit(exercise) })
+                DropdownMenuItem(text = { Text("删除计划动作") }, onClick = { showMenu = false; onDelete(exercise.id) })
+            }
+        }
         DragHandle(
             onMove = { direction ->
-                val targetIndex = index + direction
-                if (targetIndex !in 0..lastIndex) {
-                    0f
-                } else {
-                    onMove(exercise.id, direction)
-                    rowHeightPx
-                }
+                if (index + direction !in 0..lastIndex) 0f else { onMove(exercise.id, direction); rowHeightPx }
             },
             onDragOffsetChanged = { dragOffset = it },
             onDraggingChanged = { isDragging = it },
         )
-        Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
-            Text(exercise.name, fontWeight = FontWeight.SemiBold)
-            Text(exerciseLine(exercise), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-        }
-        IconButton(onClick = { onEdit(exercise) }) { Icon(Icons.Filled.Edit, contentDescription = "编辑计划动作") }
-        IconButton(onClick = { onDelete(exercise.id) }) { Icon(Icons.Filled.Delete, contentDescription = "删除计划动作") }
     }
 }
 
@@ -1372,24 +1413,33 @@ private class PlannedExerciseDraft(initial: PlannedExercise? = null) {
     val id: String = initial?.id ?: UUID.randomUUID().toString()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlannedExerciseEditorDialog(
     initial: PlannedExercise?,
+    isEditing: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (PlannedExercise) -> Unit,
 ) {
     var showMuscles by remember { mutableStateOf(false) }
     val draft = remember(initial?.id) { PlannedExerciseDraft(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "添加计划动作" else "编辑计划动作") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(draft.name, { draft.name = it }, label = { Text("动作名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    val fieldColors = TextFieldDefaults.colors(
+        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+    )
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding().padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (isEditing) "编辑计划动作" else "添加计划动作", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 12.dp)) {
+                TextField(value = draft.name, onValueChange = { draft.name = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("动作名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(draft.data, { draft.data = it }, label = { Text("数据") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    OutlinedTextField(draft.unit, { draft.unit = it }, label = { Text("单位") }, singleLine = true, modifier = Modifier.weight(1f))
+                    TextField(value = draft.data, onValueChange = { draft.data = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("数据") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    TextField(value = draft.unit, onValueChange = { draft.unit = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("单位") }, singleLine = true, modifier = Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                     TextButton(onClick = { draft.unit = "" }) { Text("无单位") }
@@ -1399,21 +1449,18 @@ private fun PlannedExerciseEditorDialog(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(draft.count, { draft.count = it }, label = { Text("个数(每组)") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    OutlinedTextField(draft.sets, { draft.sets = it }, label = { Text("组数") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    TextField(value = draft.count, onValueChange = { draft.count = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("个数(每组)") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    TextField(value = draft.sets, onValueChange = { draft.sets = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("组数") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
-                OutlinedTextField(draft.note, { draft.note = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth())
+                TextField(value = draft.note, onValueChange = { draft.note = it }, colors = fieldColors, shape = RoundedCornerShape(14.dp), label = { Text("备注") }, modifier = Modifier.fillMaxWidth())
                 TextButton(onClick = { showMuscles = true }, modifier = Modifier.fillMaxWidth()) { Text("选择锻炼肌群") }
                 if (draft.muscles.isNotEmpty()) Text("已选择肌肉：${draft.muscles.joinToString("、") { it.name }}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
+            Button(onClick = {
                 onConfirm(PlannedExercise(draft.id, draft.name.trim(), draft.data.toDoubleOrNull(), draft.unit.trim(), draft.count.toIntOrNull(), draft.sets.toIntOrNull(), draft.note.trim(), draft.muscles))
-            }) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+            }, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("保存") }
+        }
+    }
     if (showMuscles) {
         MusclePickerDemo(draft.muscles, { draft.muscles = it }, { showMuscles = false })
     }
@@ -1453,13 +1500,7 @@ private fun HistoryActionPickerPage(
             } else {
                 LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
                     item {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            label = { Text("搜索动作或肌群") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        GymSearchField(searchQuery, { searchQuery = it }, "搜索动作或肌群")
                     }
                     if (filteredActions.isEmpty()) {
                         item {
@@ -2110,6 +2151,19 @@ private fun MusclePickerDemo(
 ) {
     val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var pendingSelection by remember { mutableStateOf(initialMuscles) }
+    val palette = MaterialTheme.colorScheme
+    fun css(color: Color) = "#%06X".format(color.toArgb() and 0xffffff)
+    val pickerColors = JSONObject().apply {
+        put("background", css(palette.surface))
+        put("surface", css(palette.surfaceContainerHigh))
+        put("text", css(palette.onSurface))
+        put("muted", css(palette.onSurfaceVariant))
+        put("primary", css(palette.primary))
+        put("onPrimary", css(palette.onPrimary))
+        put("border", css(palette.outlineVariant))
+        put("fill", css(lerp(palette.surface, palette.onSurfaceVariant, .55f)))
+    }.toString()
     val initialJson = remember(initialMuscles) {
         AppJson.json.encodeToString(ListSerializer(MuscleSelection.serializer()), initialMuscles)
     }
@@ -2126,13 +2180,18 @@ private fun MusclePickerDemo(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                         }
                     },
-                    actions = { TextButton(onClick = onDismiss) { Text("完成") } },
+                    actions = { TextButton(onClick = {
+                        onSelectionChanged(pendingSelection)
+                        onDismiss()
+                    }) { Text("完成") } },
                 )
             },
         ) { padding ->
             AndroidView(
                 factory = {
                     WebView(context).apply {
+                        setBackgroundColor(palette.surface.toArgb())
+                        layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                         settings.apply {
                             javaScriptEnabled = true
                             setSupportZoom(false)
@@ -2145,18 +2204,19 @@ private fun MusclePickerDemo(
                                 mainHandler.post {
                                     runCatching {
                                         AppJson.json.decodeFromString<List<MuscleSelection>>(json)
-                                    }.onSuccess(onSelectionChanged)
+                                    }.onSuccess { pendingSelection = it }
                                 }
                             }
                         }, "AndroidMusclePicker")
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView, url: String) {
-                                view.evaluateJavascript("setSelectedMuscles($initialJson)", null)
+                                view.evaluateJavascript("setPickerColors($pickerColors);setSelectedMuscles($initialJson)", null)
                             }
                         }
                         loadUrl("file:///android_asset/muscle-picker/index.html")
                     }
                 },
+                onRelease = { it.removeJavascriptInterface("AndroidMusclePicker"); it.destroy() },
                 modifier = Modifier.padding(padding).fillMaxSize(),
             )
         }
@@ -2180,7 +2240,6 @@ private fun HistoryScreen(
     val actions = remember(data) { buildActions(data.sessions) }
     var searchQuery by remember { mutableStateOf("") }
     var editingMusclesFor by remember { mutableStateOf<String?>(null) }
-    var pendingMuscles by remember { mutableStateOf<List<MuscleSelection>>(emptyList()) }
     val filteredActions = actions.filter { actionMatchesQuery(it.name, searchQuery, it.muscles) }
     val selected = actions.firstOrNull { it.name == selectedName }
     val editingAction = actions.firstOrNull { it.name == editingMusclesFor }
@@ -2218,13 +2277,7 @@ private fun HistoryScreen(
                 } else {
                     LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
                         item {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                label = { Text("搜索动作或肌群") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            )
+                            GymSearchField(searchQuery, { searchQuery = it }, "搜索动作或肌群")
                         }
                         if (filteredActions.isEmpty()) {
                             item {
@@ -2277,19 +2330,18 @@ private fun HistoryScreen(
                             fontSize = 13.sp,
                         )
                         TextButton(onClick = {
-                            pendingMuscles = act.muscles
                             editingMusclesFor = act.name
                         }) { Text("编辑锻炼肌群") }
                     }
 
                     // fatigue warning toggle (can be turned off per action)
                     val suppressed = data.suppressedFatigue.contains(act.name)
-                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("疲劳预警", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    if (suppressed) "已关闭" else "三天内做过将在列表中显示黄色警示",
+                                    if (suppressed) "已关闭" else "最近不足 3 天训练过的肌群会显示提醒",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.outline,
                                 )
@@ -2306,11 +2358,23 @@ private fun HistoryScreen(
                                 info,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                                 fontSize = 12.sp,
-                                color = Color(0xFFB26A00),
+                                color = MaterialTheme.colorScheme.tertiary,
                             )
                         }
                     }
 
+                    TextButton(
+                        onClick = { onOpenStatistics(act.name) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                            .clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    ) {
+                        Icon(Icons.Rounded.BarChart, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("查看该动作统计")
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                    Text("历史记录", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     HistoryRecordSortControls(
                         sortBy = recordSort,
                         descending = sortDescending,
@@ -2322,33 +2386,25 @@ private fun HistoryScreen(
                     )
 
                     sortedRecords.forEach { r ->
-                        Card(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .padding(horizontal = 20.dp)
                                 .clickable { onPickFill(act.name, r) },
                         ) {
-                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     r.date,
                                     modifier = Modifier.width(84.dp),
                                     color = MaterialTheme.colorScheme.outline,
                                     fontSize = 12.sp,
                                 )
-                                Text(recordLine(r), style = MaterialTheme.typography.bodyMedium)
+                                Text(recordLine(r), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End)
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { onOpenStatistics(act.name) },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    ) {
-                        Icon(Icons.Rounded.BarChart, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("查看该动作统计")
-                    }
                     Spacer(Modifier.height(24.dp))
                 }
             }
@@ -2358,9 +2414,8 @@ private fun HistoryScreen(
     editingAction?.let { action ->
         MusclePickerDemo(
             initialMuscles = action.muscles,
-            onSelectionChanged = { pendingMuscles = it },
+            onSelectionChanged = { onEditMuscles(action.name, it) },
             onDismiss = {
-                onEditMuscles(action.name, pendingMuscles)
                 editingMusclesFor = null
             },
         )
@@ -2381,7 +2436,7 @@ private fun HistoryRecordSortControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
-                OutlinedButton(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                     Text("排序：${sortBy.label}")
                     Icon(Icons.Filled.ExpandMore, contentDescription = null)
                 }
@@ -2397,7 +2452,7 @@ private fun HistoryRecordSortControls(
                     }
                 }
             }
-            OutlinedButton(onClick = onToggleDirection, modifier = Modifier.weight(1f)) {
+            TextButton(onClick = onToggleDirection, modifier = Modifier.weight(1f)) {
                 Text(
                     if (sortBy == ActionRecordSort.TIME) {
                         if (descending) "最新在前" else "最早在前"
@@ -2468,18 +2523,23 @@ private fun fatigueInfoOf(
 
 @Composable
 private fun ActionRow(a: ActionSummary, fatigueInfo: String?, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable(onClick = onClick)) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(a.name, style = MaterialTheme.typography.titleMedium)
-                    Text("${a.addedCount} 次", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(10.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(a.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (a.muscles.isNotEmpty()) Text(a.muscles.joinToString("、") { it.name }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${a.addedCount} 条记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (fatigueInfo != null) {
-                Text("⚠ 疲劳预警\n$fatigueInfo", color = Color(0xFFB26A00), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("相关肌群近期训练过", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.semantics { contentDescription = "疲劳预警：$fatigueInfo" })
             }
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 

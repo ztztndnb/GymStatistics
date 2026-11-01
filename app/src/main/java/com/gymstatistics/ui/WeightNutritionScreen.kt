@@ -114,7 +114,7 @@ private fun WeightNutritionContent(catalog: WeightNutritionCatalog, initialFavor
         }
     }
     Column(modifier.fillMaxSize()) {
-        NutritionSearchField(query, { query = it }, "搜索菜品")
+        GymSearchField(query, { query = it }, "搜索菜品")
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(category == null && !favoritesOnly, { category = null; favoritesOnly = false }, label = { Text("全部") })
             FilterChip(favoritesOnly, { category = null; favoritesOnly = true }, label = { Text("收藏") })

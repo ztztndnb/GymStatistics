@@ -149,14 +149,14 @@ test("history action search supports fuzzy, full-pinyin, and initials matching",
   assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery, it\.muscles\) \}/);
   assert.match(gymAppSource, /Transliterator\.getInstance\("Han-Latin"\)/);
   assert.match(gymAppSource, /query\.all \{ char -> name\.indexOf\(char, index, ignoreCase = true\)\.also \{ index = it \+ 1 \} >= 0 \}/);
-  assert.match(gymAppSource, /label = \{ Text\("搜索动作或肌群"\) \}/);
+  assert.match(gymAppSource, /GymSearchField\(searchQuery, \{ searchQuery = it \}, "搜索动作或肌群"\)/);
   assert.match(gymAppSource, /没有匹配的动作/);
 });
 
 test("history action search also matches muscle names", () => {
   assert.match(gymAppSource, /actions\.filter \{ actionMatchesQuery\(it\.name, searchQuery, it\.muscles\) \}/);
   assert.match(gymAppSource, /muscles\.any \{ muscle -> searchFieldMatches\(muscle\.name/);
-  assert.match(gymAppSource, /label = \{ Text\("搜索动作或肌群"\) \}/);
+  assert.match(gymAppSource, /GymSearchField\(searchQuery, \{ searchQuery = it \}, "搜索动作或肌群"\)/);
 });
 
 test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle names", () => {
@@ -179,7 +179,7 @@ test("muscle picker is full-screen, zoomable, and uses exact Chinese muscle name
   assert.match(musclePickerSource, /ViewSide\.BACK/);
   assert.match(musclePickerSource, /window\.addEventListener\('error'/);
   assert.match(musclePickerSource, /id="error"/);
-  assert.match(musclePickerSource, /#body-map \{ height: calc\(100vh - 156px\);/);
+  assert.match(musclePickerSource, /#body-map \{ flex: 1; min-height: 180px;/);
 });
 
 test("muscle selections are persisted with each exercise and restored in the editor", () => {

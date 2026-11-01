@@ -45,6 +45,17 @@ class NutritionLibraryTest {
         } finally { bitmap.recycle() }
     }
 
+    private fun awaitDisplayed(text: String) {
+        try {
+            compose.waitUntil(5_000) {
+                runCatching { compose.onNodeWithText(text).assertIsDisplayed() }.isSuccess
+            }
+        } catch (failure: Throwable) {
+            screenshot("nutrition-transition-failure")
+            throw failure
+        }
+    }
+
     @Test fun weightSheetRejectsInvalidInputAndEditsExistingMeal() {
         compose.onNodeWithContentDescription("营养库").performClick()
         compose.onNodeWithText("罗森").performClick()
@@ -60,6 +71,7 @@ class NutritionLibraryTest {
         compose.onNodeWithText("253 kcal").assertIsDisplayed()
         compose.onNodeWithText("查看已选").performClick()
         compose.onNodeWithContentDescription("修改香肠面包重量").performClick()
+        awaitDisplayed("食用重量（克）")
         compose.onNodeWithText("食用重量（克）").performTextReplacement("190")
         Espresso.closeSoftKeyboard()
         compose.onNodeWithText("加入配餐").performClick()
@@ -235,6 +247,7 @@ class NutritionLibraryTest {
         compose.onNodeWithText("0.5 份").assertIsDisplayed()
         compose.onNodeWithText("2025.5 kJ").assertExists()
         compose.onNodeWithText("清空").performClick()
+        awaitDisplayed("尚未选择餐品")
         compose.onNodeWithText("尚未选择餐品").assertIsDisplayed()
     }
 
