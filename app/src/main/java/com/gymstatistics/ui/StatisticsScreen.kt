@@ -428,18 +428,19 @@ private fun StatisticsLineChart(points: List<ProgressPoint>, unit: String) {
     val span = (max - min).takeIf { it > 0 } ?: max.coerceAtLeast(1.0)
     val chartColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val axisLineHeight = MaterialTheme.typography.labelSmall.lineHeight
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.height(160.dp).widthIn(min = 36.dp), verticalArrangement = if (max == min) Arrangement.Center else Arrangement.SpaceBetween) {
-                Text(statisticsNumber(max), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (max != min) Text(statisticsNumber(min), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            ChartYAxis(min, max, 160.dp, ::statisticsNumber)
             Canvas(Modifier.weight(1f).height(160.dp).semantics { contentDescription = "${points.size}个训练日，最低${statisticsNumber(min)}，最高${statisticsNumber(max)} $unit" }) {
-                val inset = 6.dp.toPx()
+                val inset = axisLineHeight.toPx() / 2
                 val width = (size.width - inset * 2).coerceAtLeast(1f)
                 val height = size.height - inset * 2
-                repeat(4) { index -> val y = inset + height * index / 3; drawLine(gridColor, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx()) }
+                chartAxisValues(min, max).forEachIndexed { index, _ ->
+                    val y = inset + height * if (max == min) .5f else index / 3f
+                    drawLine(gridColor, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx())
+                }
                 val first = points.first().date.toEpochDay()
                 val daySpan = (points.last().date.toEpochDay() - first).coerceAtLeast(1)
                 val locations = points.map { point ->

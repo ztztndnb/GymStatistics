@@ -101,14 +101,17 @@ class BodyMeasurementsTest {
         awaitWrites()
         compose.onNodeWithText("身体").performClick()
         compose.onNodeWithContentDescription("2个测量日，最低65.5，最高66 kg").assertExists()
+        listOf("66", "65.83", "65.67", "65.5").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
         compose.onNodeWithText("近90天").performClick()
         compose.onNodeWithContentDescription("3个测量日，最低65.5，最高68 kg").assertExists()
         compose.onNodeWithText("全部").performClick()
         compose.onNodeWithContentDescription("4个测量日，最低65.5，最高70 kg").assertExists()
+        compose.onNodeWithText("67").assertIsDisplayed()
         compose.onNodeWithText("体重（kg）").performClick()
         compose.onNodeWithText("腰围（cm）").performClick()
         compose.onNodeWithText("最新 79 cm（$today）").assertIsDisplayed()
         compose.onNodeWithContentDescription("2个测量日，最低79，最高80 cm").assertExists()
+        listOf("80", "79.67", "79.33", "79").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
     }
 
     @Test fun historyOpensItsOwnDayAndSavingRefreshesTheChart() {
@@ -129,6 +132,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("最新 65 kg（$today）").assertIsDisplayed()
         compose.onNodeWithContentDescription("1个测量日，最低65，最高65 kg").assertExists()
+        compose.onNode(hasText("65") and !hasSetTextAction()).assertIsDisplayed()
         Assert.assertEquals(mapOf("weight" to 65.0, "waist" to 80.0), runBlocking { WorkoutRepository(fixtureApp).load() }.bodyData!!.records.single().values)
     }
 

@@ -109,21 +109,28 @@ private fun BodyTrendChart(points: List<BodyPoint>, unit: String) {
     val max = points.maxOf { it.value }
     val color = MaterialTheme.colorScheme.primary
     val grid = MaterialTheme.colorScheme.outlineVariant
+    val axisLineHeight = MaterialTheme.typography.labelSmall.lineHeight
     Text("${bodyNumber(min)} – ${bodyNumber(max)} $unit", style = MaterialTheme.typography.labelSmall)
-    Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = "${points.size}个测量日，最低${bodyNumber(min)}，最高${bodyNumber(max)} $unit" }) {
-        val inset = 8.dp.toPx()
-        val width = (size.width - inset * 2).coerceAtLeast(1f)
-        val height = (size.height - inset * 2).coerceAtLeast(1f)
-        repeat(4) { index -> val y = inset + height * index / 3; drawLine(grid, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx()) }
-        val first = points.first().date.toEpochDay()
-        val days = (points.last().date.toEpochDay() - first).coerceAtLeast(1)
-        val locations = points.map {
-            Offset(if (points.size == 1) size.width / 2 else inset + width * ((it.date.toEpochDay() - first).toDouble() / days).toFloat(),
-                inset + height * if (max == min) .5f else ((max - it.value) / (max - min)).toFloat())
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChartYAxis(min, max, 150.dp)
+        Canvas(Modifier.weight(1f).height(150.dp).semantics { contentDescription = "${points.size}个测量日，最低${bodyNumber(min)}，最高${bodyNumber(max)} $unit" }) {
+            val inset = axisLineHeight.toPx() / 2
+            val width = (size.width - inset * 2).coerceAtLeast(1f)
+            val height = (size.height - inset * 2).coerceAtLeast(1f)
+            chartAxisValues(min, max).forEachIndexed { index, _ ->
+                val y = inset + height * if (max == min) .5f else index / 3f
+                drawLine(grid, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx())
+            }
+            val first = points.first().date.toEpochDay()
+            val days = (points.last().date.toEpochDay() - first).coerceAtLeast(1)
+            val locations = points.map {
+                Offset(if (points.size == 1) size.width / 2 else inset + width * ((it.date.toEpochDay() - first).toDouble() / days).toFloat(),
+                    inset + height * if (max == min) .5f else ((max - it.value) / (max - min)).toFloat())
+            }
+            val path = Path().apply { locations.forEachIndexed { index, point -> if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y) } }
+            drawPath(path, color, style = Stroke(2.dp.toPx()))
+            locations.forEach { drawCircle(color, 3.dp.toPx(), it) }
         }
-        val path = Path().apply { locations.forEachIndexed { index, point -> if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y) } }
-        drawPath(path, color, style = Stroke(2.dp.toPx()))
-        locations.forEach { drawCircle(color, 3.dp.toPx(), it) }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(points.first().date.toString(), style = MaterialTheme.typography.labelSmall)

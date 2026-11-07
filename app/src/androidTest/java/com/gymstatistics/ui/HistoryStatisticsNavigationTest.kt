@@ -105,6 +105,8 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("最新在前").assertIsDisplayed()
         openStatistics()
         assertSelected("测试Z深蹲", "2个训练日，最低66，最高88 磅")
+        listOf("88", "80.67", "73.33", "66").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        screenshot("ui-axis-statistics")
         back()
         compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
         compose.onNodeWithText("排序：时间").assertIsDisplayed()
