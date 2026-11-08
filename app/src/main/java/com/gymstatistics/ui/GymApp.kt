@@ -22,6 +22,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -1040,8 +1041,8 @@ private fun WeekDateCells(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .offset(x = animatedHighlightX)
-                    .width(34.dp).height(58.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(34.dp)
+                    .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
@@ -1051,13 +1052,16 @@ private fun WeekDateCells(
                 val isSelected = d == selectedDate
                 val isToday = d == today
                 Column(
-                    modifier = Modifier.weight(1f).clickable { onSelect(d) },
+                    modifier = Modifier.weight(1f).clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(d) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
                         weekdayLabels[i],
                         fontSize = 12.sp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.outline,
                     )
                     Spacer(Modifier.height(4.dp))
