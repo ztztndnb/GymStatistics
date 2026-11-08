@@ -378,6 +378,7 @@ fun GymApp(viewModel: GymViewModel) {
                                     if (dragDirection != 0) {
                                         DayModeContent(
                                             mode = workoutMode,
+                                            onModeChange = { workoutMode = it },
                                             date = selectedDate.plusDays(dragDirection.toLong()),
                                             sessions = state.data.sessions,
                                             plan = state.data.trainingPlan,
@@ -393,6 +394,7 @@ fun GymApp(viewModel: GymViewModel) {
                                     }
                                     DayModeContent(
                                         mode = workoutMode,
+                                        onModeChange = { workoutMode = it },
                                         date = selectedDate,
                                         sessions = state.data.sessions,
                                         plan = state.data.trainingPlan,
@@ -655,6 +657,7 @@ private fun WorkoutDayContent(
 @Composable
 private fun DayModeContent(
     mode: WorkoutMode,
+    onModeChange: (WorkoutMode) -> Unit,
     date: LocalDate,
     sessions: List<SessionRecord>,
     plan: TrainingPlan?,
@@ -672,7 +675,9 @@ private fun DayModeContent(
                 Text("当天训练", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("${exercises.size} 个动作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(if (mode == WorkoutMode.MANUAL) "手动模式" else "计划模式", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { onModeChange(if (mode == WorkoutMode.MANUAL) WorkoutMode.PLAN else WorkoutMode.MANUAL) }) {
+                Text(if (mode == WorkoutMode.MANUAL) "手动模式" else "计划模式", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     if (mode == WorkoutMode.MANUAL) {
         WorkoutDayContent(

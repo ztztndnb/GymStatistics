@@ -31,6 +31,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.MainActivity
 import com.gymstatistics.data.ExerciseRecord
+import com.gymstatistics.data.PlannedExercise
 import java.time.LocalDate
 import java.io.File
 import java.nio.file.Files
@@ -112,6 +113,34 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("排序：时间").assertIsDisplayed()
         compose.onNodeWithText("数据趋势", substring = true).assertDoesNotExist()
         compose.onNodeWithText("总个数趋势", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun homeModeButtonTogglesContentAndSharesTheSettingsMode() {
+        compose.runOnIdle {
+            model.addPlannedExercise(LocalDate.now().dayOfWeek.value,
+                PlannedExercise(id = "home-mode-test", name = "计划模式测试动作", data = 20.0, unit = "kg", count = 10, sets = 3))
+        }
+        val sessions = model.uiState.data.sessions
+        compose.onNodeWithText("测试A卧推").assertIsDisplayed()
+        compose.onNodeWithText("手动模式").performClick()
+        compose.onNodeWithText("计划模式").assertIsDisplayed()
+        compose.onNodeWithText("计划模式测试动作").assertIsDisplayed()
+        compose.onNodeWithText("测试A卧推").assertDoesNotExist()
+        compose.onNodeWithText("今天").assertIsDisplayed()
+
+        compose.onNodeWithText("计划模式").performClick()
+        compose.onNodeWithText("手动模式").assertIsDisplayed()
+        compose.onNodeWithText("测试A卧推").assertIsDisplayed()
+
+        compose.onNodeWithText("手动模式").performClick()
+        compose.onNodeWithContentDescription("设置").performClick()
+        compose.onNodeWithText("手动模式").performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("手动模式").assertIsDisplayed()
+        compose.onNodeWithText("测试A卧推").assertIsDisplayed()
+        compose.onNodeWithText("计划模式测试动作").assertDoesNotExist()
+        compose.onNodeWithText("今天").assertIsDisplayed()
+        assertEquals(sessions, model.uiState.data.sessions)
     }
 
     @Test fun homeRowsAndTheirMenuStillEditAndDelete() {
