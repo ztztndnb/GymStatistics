@@ -13,12 +13,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -85,6 +89,7 @@ class HistoryStatisticsNavigationTest {
             model.addSession(LocalDate.now().plusDays(1).toString(), "", listOf(
                 ExerciseRecord("测试未来动作", data = 99.0, unit = "磅", count = 1),
             ))
+            model.clearMessage()
         }
     }
 
@@ -165,6 +170,53 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("删除").performClick()
         compose.onNodeWithText("测试A卧推").assertDoesNotExist()
         compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
+    }
+
+    @Test fun addingOnAnotherDateShowsTheDateAndSavesThere() {
+        val today = LocalDate.now()
+        val target = if (today.dayOfWeek.value == 1) today.plusDays(1) else today.minusDays(1)
+        compose.onNodeWithText(target.dayOfMonth.toString()).performClick()
+        compose.onNodeWithText("记录动作").performClick()
+        val reminder = compose.onNodeWithText("记录日期为 $target（非今天）")
+        compose.waitUntil(5_000) { reminder.isDisplayed() }
+        compose.onNodeWithTag("record-action-name", useUnmergedTree = true).performTextReplacement("异日测试动作")
+        compose.onNodeWithText("保存").performClick()
+        compose.onNodeWithText("异日测试动作").assertIsDisplayed()
+        compose.runOnIdle {
+            val recorded = model.uiState.data.sessions.single { session ->
+                session.exercises.any { it.name == "异日测试动作" }
+            }
+            assertEquals(target.toString(), recorded.date)
+        }
+    }
+
+    @Test fun homeAddSuggestsAtMostThreeNamesAndSelectionOnlyFillsTheName() {
+        compose.runOnIdle {
+            model.addSession(LocalDate.now().minusDays(7).toString(), "", (1..5).map {
+                ExerciseRecord("候选肩推$it", data = 50.0, unit = "kg")
+            })
+            model.clearMessage()
+        }
+        compose.onNodeWithText("记录动作").performClick()
+        val name = compose.onNodeWithTag("record-action-name", useUnmergedTree = true)
+        compose.waitUntil(5_000) { name.isDisplayed() }
+        compose.onNodeWithText("非今天", substring = true).assertDoesNotExist()
+        val suggestions = hasText("候选肩推", substring = true) and !hasSetTextAction()
+        name.performClick()
+        assertTrue(compose.onAllNodes(suggestions).fetchSemanticsNodes().isEmpty())
+        name.performTextReplacement("候选肩推")
+        assertEquals(3, compose.onAllNodes(suggestions).fetchSemanticsNodes().size)
+        name.assertIsFocused()
+
+        val data = compose.onNode(hasText("数据") and hasSetTextAction())
+        data.performTextReplacement("25")
+        assertTrue(compose.onAllNodes(suggestions).fetchSemanticsNodes().isEmpty())
+
+        name.performTextReplacement("候选肩推2")
+        compose.onNode(hasText("候选肩推2") and !hasSetTextAction()).performClick()
+        name.assertTextContains("候选肩推2")
+        data.assertTextContains("25")
+        assertTrue(compose.onAllNodes(suggestions).fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun homeActionMenuOpensItsOwnLibraryDetail() {

@@ -116,6 +116,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -128,6 +129,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -144,6 +146,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import android.os.Handler
@@ -433,11 +436,15 @@ fun GymApp(viewModel: GymViewModel) {
                         )
                     }
                     if (showAdd) {
+                        val actionNames = if (editingExerciseId == null) {
+                            remember(state.data.sessions) { buildActions(state.data.sessions).map { it.name } }
+                        } else emptyList()
                         AddSessionDialog(
                             defaultDate = selectedDate,
                             initial = prefillExercise,
                             initialNote = prefillExercise?.note ?: "",
                             isEditing = editingExerciseId != null,
+                            actionNames = actionNames,
                             onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
                             onConfirm = { date, note, exercise ->
                                 if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
@@ -2044,6 +2051,7 @@ private fun AddSessionDialog(
     initial: ExerciseRecord?,
     initialNote: String,
     isEditing: Boolean,
+    actionNames: List<String>,
     onDismiss: () -> Unit,
     onConfirm: (String, String, ExerciseRecord) -> Unit,
 ) {
@@ -2053,10 +2061,22 @@ private fun AddSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEditing) "编辑动作" else "记录训练") },
+        title = {
+            Column {
+                Text(if (isEditing) "编辑动作" else "记录训练")
+                if (!isEditing && defaultDate != LocalDate.now()) {
+                    Text(
+                        "记录日期为 $defaultDate（非今天）",
+                        modifier = Modifier.padding(top = 6.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+        },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                ExerciseEditor(draft = exercise, onChooseMuscles = { showMuscleDemo = true })
+                ExerciseEditor(draft = exercise, actionNames = actionNames, onChooseMuscles = { showMuscleDemo = true })
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = note,
@@ -2094,16 +2114,42 @@ private fun AddSessionDialog(
 }
 
 @Composable
-private fun ExerciseEditor(draft: ExerciseDraft, onChooseMuscles: () -> Unit) {
+private fun ExerciseEditor(draft: ExerciseDraft, actionNames: List<String>, onChooseMuscles: () -> Unit) {
+    var nameFocused by remember { mutableStateOf(false) }
+    var showSuggestions by remember { mutableStateOf(false) }
+    val matches = remember(actionNames, draft.name, nameFocused) {
+        if (!nameFocused || normalizeSearchText(draft.name).isEmpty()) emptyList()
+        else actionNames.asSequence().filter { actionMatchesQuery(it, draft.name) }.take(3).toList()
+    }
+    val expanded = showSuggestions && matches.isNotEmpty()
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(8.dp)) {
-            OutlinedTextField(
-                value = draft.name,
-                onValueChange = { draft.name = it },
-                label = { Text("动作名称") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = draft.name,
+                    onValueChange = { draft.name = it; showSuggestions = true },
+                    label = { Text("动作名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("record-action-name")
+                        .onFocusChanged {
+                            nameFocused = it.isFocused
+                            showSuggestions = it.isFocused
+                        },
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { showSuggestions = false },
+                    modifier = Modifier.width(maxWidth),
+                    properties = PopupProperties(focusable = false),
+                ) {
+                    matches.forEach { name ->
+                        DropdownMenuItem(text = { Text(name) }, onClick = {
+                            draft.name = name
+                            showSuggestions = false
+                        })
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
