@@ -80,7 +80,7 @@ class HistoryStatisticsNavigationTest {
                 ExerciseRecord("测试Z深蹲", data = 88.0, unit = "磅", count = 8, sets = 4),
             ))
             model.addSession(LocalDate.now().minusDays(1).toString(), "", listOf(
-                ExerciseRecord("测试Z深蹲", data = 66.0, unit = "磅", count = 6, sets = 2),
+                ExerciseRecord("测试Z深蹲", data = 30.0, unit = "kg", count = 6, sets = 2),
             ))
             model.addSession(LocalDate.now().plusDays(1).toString(), "", listOf(
                 ExerciseRecord("测试未来动作", data = 99.0, unit = "磅", count = 1),
@@ -105,8 +105,8 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("排序：时间").assertIsDisplayed()
         compose.onNodeWithText("最新在前").assertIsDisplayed()
         openStatistics()
-        assertSelected("测试Z深蹲", "2个训练日，最低66，最高88 磅")
-        listOf("88", "80.67", "73.33", "66").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        assertSelected("测试Z深蹲", "2个训练日，最低30，最高39.92 kg")
+        listOf("39.92", "36.61", "33.31", "30").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
         screenshot("ui-axis-statistics")
         back()
         compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
@@ -170,13 +170,13 @@ class HistoryStatisticsNavigationTest {
     @Test fun openingAnotherActionDoesNotKeepThePreviousSelection() {
         openDetail("测试Z深蹲")
         openStatistics()
-        assertSelected("测试Z深蹲", "2个训练日，最低66，最高88 磅")
+        assertSelected("测试Z深蹲", "2个训练日，最低30，最高39.92 kg")
         back()
         compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("搜索动作或肌群").performTextReplacement("测试A卧推")
         compose.onNode(hasText("测试A卧推") and !hasSetTextAction()).performClick()
         openStatistics()
-        assertSelected("测试A卧推", "1个训练日，最低11，最高11 磅")
+        assertSelected("测试A卧推", "1个训练日，最低4.99，最高4.99 kg")
     }
 
     @Test fun actionWithoutEligibleRecordsDoesNotFallBackToAnotherAction() {

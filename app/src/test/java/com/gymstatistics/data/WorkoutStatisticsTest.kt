@@ -74,16 +74,30 @@ class WorkoutStatisticsTest {
         assertTrue(plannedMuscleWorkloads(null).isEmpty())
     }
 
-    @Test fun progressKeepsUnitsSeparateAndUsesDailyBestInChronologicalOrder() {
+    @Test fun progressCombinesWeightsInKilogramsBeforeChoosingTheDailyBest() {
         val stats = WorkoutStatistics(listOf(
-            session("2026-01-06", exercise(70.0), exercise(100.0, "lbs"), exercise(65.0)),
-            session("2026-01-05", exercise(60.0)),
+            session("2026-01-07", exercise(100.0, " 磅 "), exercise(200.0, "m")),
+            session("2026-01-06", exercise(60.0), exercise(100.0, "lbs"), exercise(50.0, "公斤")),
+            session("2026-01-05", exercise(150.0, " LB "), exercise(65.0, "千克")),
         ), today)
-        assertEquals(listOf("kg", "lbs"), stats.units("卧推"))
+        assertEquals(listOf("kg", "m"), stats.units("卧推"))
         val points = stats.progress("卧推", "kg", ProgressMetric.VALUE)
-        assertEquals(listOf(60.0, 70.0), points.map { it.value })
-        assertEquals(listOf("2026-01-05", "2026-01-06"), points.map { it.date.toString() })
-        assertEquals(100.0, stats.progress("卧推", "lbs", ProgressMetric.VALUE).single().value, 0.0)
+        assertArrayEquals(doubleArrayOf(68.0388555, 60.0, 45.359237), points.map { it.value }.toDoubleArray(), 1e-8)
+        assertEquals(listOf("2026-01-05", "2026-01-06", "2026-01-07"), points.map { it.date.toString() })
+        assertArrayEquals(doubleArrayOf(2041.165665, 1800.0, 1360.77711),
+            stats.progress("卧推", "kg", ProgressMetric.COEFFICIENT).map { it.value }.toDoubleArray(), 1e-8)
+        assertEquals(200.0, stats.progress("卧推", "m", ProgressMetric.VALUE).single().value, 0.0)
+        assertEquals(" 磅 ", stats.days.first().exercises.first().unit)
+    }
+
+    @Test fun countAndSetsUseTheSameWeightGroupWithoutScalingCounts() {
+        val stats = WorkoutStatistics(listOf(session("2026-01-06",
+            exercise(60.0, count = 6, sets = 2),
+            exercise(120.0, "lbs", count = 8, sets = 3),
+            exercise(null, "磅", count = 5, sets = 4),
+        )), today)
+        assertEquals(24.0, stats.progress("卧推", "kg", ProgressMetric.TOTAL_COUNT).single().value, 0.0)
+        assertEquals(4.0, stats.progress("卧推", "kg", ProgressMetric.SETS).single().value, 0.0)
     }
 
     @Test fun progressSupportsCoefficientsCountsSetsAndInclusiveRange() {

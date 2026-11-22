@@ -52,12 +52,12 @@ class WorkoutStatistics(sessions: List<SessionRecord>, val today: LocalDate) {
             .flatMap { it.exercises }.map { it.muscles to recordedSets(it.sets) })
 
     fun units(name: String): List<String> = days.flatMap { it.exercises }
-        .filter { it.name == name }.map { it.unit.trim() }.distinct().sorted()
+        .filter { it.name == name }.map { progressUnit(it.unit) }.distinct().sorted()
 
-    /** Each date contributes its best recorded value, within ONE exact unit. */
+    /** Each date contributes its best value after converting weights to kilograms. */
     fun progress(name: String, unit: String, metric: ProgressMetric, from: LocalDate? = null): List<ProgressPoint> =
         days.filter { from == null || it.date >= from }.mapNotNull { day ->
-            val best = day.exercises.asSequence().filter { it.name == name && it.unit.trim() == unit }
+            val best = day.exercises.asSequence().filter { it.name == name && progressUnit(it.unit) == unit }
                 .mapNotNull { metricValue(it, metric) }.maxOrNull()
             best?.let { ProgressPoint(day.date, it) }
         }.sortedBy { it.date }
@@ -78,8 +78,17 @@ private fun workloads(records: List<Pair<List<MuscleSelection>, Long>>): List<Mu
         .groupBy { it.first.id }.values.map { rows -> MuscleWorkload(rows.first().first, rows.sumOf { it.second }) }
         .filter { it.sets > 0 }.sortedWith(compareByDescending<MuscleWorkload> { it.sets }.thenBy { it.muscle.name })
 
+private fun kilogramsPerUnit(unit: String): Double? = when (unit.trim().lowercase()) {
+    "kg", "千克", "公斤" -> 1.0
+    "磅", "lb", "lbs" -> 0.45359237
+    else -> null
+}
+
+private fun progressUnit(unit: String): String = if (kilogramsPerUnit(unit) != null) "kg" else unit.trim()
+
 private fun metricValue(record: ExerciseRecord, metric: ProgressMetric): Double? {
     val value = record.data?.takeIf { it.isFinite() && it >= 0 }
+        ?.let { it * (kilogramsPerUnit(record.unit) ?: 1.0) }
     val count = record.count?.takeIf { it >= 0 }?.toDouble()
     val sets = (record.sets ?: 1).takeIf { it >= 0 }?.toDouble()
     return when (metric) {

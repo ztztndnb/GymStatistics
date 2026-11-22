@@ -86,7 +86,7 @@ internal fun StatisticsScreen(
             item(key = "recent") { RecentTrainingCard(statistics.days.take(6), onOpenDate) }
             item(key = "rules") {
                 Text(
-                    "仅统计截至今天的实际动作记录。未填写组数时按 1 组计算；不同单位不混合计算。修改、删除或导入记录后，统计会同步更新。",
+                    "仅统计截至今天的实际动作记录。未填写组数时按 1 组计算。修改、删除或导入记录后，统计会同步更新。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -368,7 +368,7 @@ private fun ExerciseProgressCard(statistics: WorkoutStatistics, requestedAction:
     val from = when (rangeIndex) { 0 -> statistics.today.minusDays(29); 1 -> statistics.today.minusDays(89); 2 -> statistics.today.minusYears(1).plusDays(1); else -> null }
     val points = remember(statistics, action, unit, metric, from) { if (action == null) emptyList() else statistics.progress(action, unit, metric, from) }
     val metricUnit = when (metric) { ProgressMetric.VALUE -> unit.ifEmpty { "无单位" }; ProgressMetric.TOTAL_COUNT -> "个"; ProgressMetric.SETS -> "组"; ProgressMetric.COEFFICIENT -> if (unit.isEmpty()) "系数" else "$unit×次" }
-    StatisticsCard("动作进步", "每个训练日取所选指标最高值，不同单位分开查看。") {
+    StatisticsCard("动作进步", "重量统一换算为 kg，其他单位单独查看。每个训练日取所选指标最高值。") {
         if (action == null) Text("记录第一个动作后，这里会显示训练曲线。", style = MaterialTheme.typography.bodyMedium) else {
             Button(
                 onClick = { query = ""; showPicker = true }, modifier = Modifier.fillMaxWidth(),
