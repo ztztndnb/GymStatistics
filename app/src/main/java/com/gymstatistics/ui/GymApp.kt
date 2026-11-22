@@ -387,6 +387,7 @@ fun GymApp(viewModel: GymViewModel) {
                                                 .graphicsLayer { translationX = contentOffset + pageWidth * dragDirection },
                                             onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                             onDelete = { confirmDeleteId = it },
+                                            onOpenAction = { name -> navigation = navigation.selectHistoryAction(name) },
                                             onReorderManual = { id, direction -> viewModel.reorderExercises(selectedDate.plusDays(dragDirection.toLong()).toString(), id, direction) },
                                             onCompletePlan = { id -> viewModel.completePlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
                                             onCancelComplete = { id -> viewModel.cancelPlannedExercise(selectedDate.plusDays(dragDirection.toLong()).toString(), id) },
@@ -403,6 +404,7 @@ fun GymApp(viewModel: GymViewModel) {
                                             .graphicsLayer { translationX = contentOffset },
                                             onEdit = { ex -> editingExerciseId = ex.id; prefillExercise = ex; showAdd = true },
                                             onDelete = { confirmDeleteId = it },
+                                            onOpenAction = { name -> navigation = navigation.selectHistoryAction(name) },
                                             onReorderManual = { id, direction -> viewModel.reorderExercises(dateKey, id, direction) },
                                             onCompletePlan = { id -> viewModel.completePlannedExercise(dateKey, id) },
                                             onCancelComplete = { id -> viewModel.cancelPlannedExercise(dateKey, id) },
@@ -595,6 +597,7 @@ private fun WorkoutDayContent(
     modifier: Modifier = Modifier,
     onEdit: (ExerciseRecord) -> Unit,
     onDelete: (String) -> Unit,
+    onOpenAction: (String) -> Unit,
     onReorder: (String, Int) -> Unit,
 ) {
     val session = sessions.firstOrNull { it.date == date.toString() }
@@ -626,6 +629,7 @@ private fun WorkoutDayContent(
                         modifier = if (ex.id == activeDraggedId) Modifier else Modifier.animateItem(),
                         onEdit = { onEdit(ex) },
                         onDelete = { onDelete(ex.id) },
+                        onOpenAction = { onOpenAction(ex.name) },
                         onMove = if (ex.plannedExerciseId == null) {
                             { direction ->
                                 val currentIndex = dayExercises.indexOfFirst { it.id == ex.id }
@@ -664,6 +668,7 @@ private fun DayModeContent(
     modifier: Modifier = Modifier,
     onEdit: (ExerciseRecord) -> Unit,
     onDelete: (String) -> Unit,
+    onOpenAction: (String) -> Unit,
     onReorderManual: (String, Int) -> Unit,
     onCompletePlan: (String) -> Unit,
     onCancelComplete: (String) -> Unit,
@@ -686,6 +691,7 @@ private fun DayModeContent(
             modifier = Modifier.fillMaxWidth().weight(1f),
             onEdit = onEdit,
             onDelete = onDelete,
+            onOpenAction = onOpenAction,
             onReorder = onReorderManual,
         )
     } else {
@@ -1917,6 +1923,7 @@ private fun ActionItemCard(
     modifier: Modifier = Modifier,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onOpenAction: () -> Unit,
     onMove: ((Int) -> Float)? = null,
     onDraggingChanged: (Boolean) -> Unit = {},
 ) {
@@ -1983,6 +1990,7 @@ private fun ActionItemCard(
                 IconButton(onClick = { showActions = true }) { Icon(Icons.Filled.MoreVert, "动作操作") }
                 DropdownMenu(showActions, { showActions = false }) {
                     DropdownMenuItem(text = { Text("编辑") }, onClick = { showActions = false; onEdit() })
+                    DropdownMenuItem(text = { Text("在动作库中查看") }, onClick = { showActions = false; onOpenAction() })
                     DropdownMenuItem(text = { Text("删除") }, onClick = { showActions = false; onDelete() })
                 }
             }

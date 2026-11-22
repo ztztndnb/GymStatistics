@@ -154,17 +154,30 @@ class HistoryStatisticsNavigationTest {
         } finally { bitmap.recycle() }
         compose.onNodeWithText("测试A卧推").performClick()
         compose.onNodeWithText("编辑动作").assertIsDisplayed()
-        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("取消").performClick()
         compose.onAllNodesWithContentDescription("动作操作")[0].performClick()
         compose.onNodeWithText("编辑").performClick()
         compose.onNodeWithText("编辑动作").assertIsDisplayed()
-        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("取消").performClick()
         compose.onAllNodesWithContentDescription("动作操作")[0].performClick()
         compose.onNodeWithText("删除").performClick()
         compose.onNodeWithText("删除动作").assertIsDisplayed()
         compose.onNodeWithText("删除").performClick()
         compose.onNodeWithText("测试A卧推").assertDoesNotExist()
         compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
+    }
+
+    @Test fun homeActionMenuOpensItsOwnLibraryDetail() {
+        compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("动作操作")[1].performClick()
+        compose.onNodeWithText("在动作库中查看").performClick()
+        compose.onNodeWithText("查看该动作统计").assertIsDisplayed()
+        compose.onNodeWithText("测试Z深蹲").assertIsDisplayed()
+        compose.onNodeWithText("测试A卧推").assertDoesNotExist()
+
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("搜索动作或肌群").assertIsDisplayed()
+        compose.onNodeWithText("测试A卧推").assertIsDisplayed()
     }
 
     @Test fun openingAnotherActionDoesNotKeepThePreviousSelection() {
