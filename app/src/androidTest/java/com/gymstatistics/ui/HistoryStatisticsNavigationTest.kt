@@ -311,8 +311,16 @@ class HistoryStatisticsNavigationTest {
         awaitPicker("document.querySelector('#body-map svg').getBoundingClientRect().height > 200", "true")
         awaitPicker("(document.body.style.height='200px', document.querySelector('#body-map').getBoundingClientRect().height >= 180 && document.body.scrollHeight > document.body.clientHeight)", "true")
         awaitPicker("(document.body.style.height='', document.querySelector('#body-map svg').getBoundingClientRect().height > 200)", "true")
-        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').dispatchEvent(new MouseEvent('click')), selected.size)", "1")
-        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').focus(), document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'})), selected.size === 0 && document.activeElement.dataset.muscleId === 'biceps-left')", "true")
+        awaitPicker("""
+            (() => {
+              const path = document.querySelector('[data-muscle-id="biceps-left"]');
+              const before = getComputedStyle(path).fill;
+              path.dispatchEvent(new MouseEvent('click'));
+              return path.isConnected && path.getAttribute('aria-pressed') === 'true' &&
+                getComputedStyle(path).fill !== before && getComputedStyle(path).webkitTapHighlightColor === 'rgba(0, 0, 0, 0)';
+            })()
+        """.trimIndent(), "true")
+        awaitPicker("(document.querySelector('[data-muscle-id=\"biceps-left\"]').focus(), document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'})), selected.size === 0 && document.activeElement.dataset.muscleId === 'biceps-left' && getComputedStyle(document.activeElement).outlineStyle === 'none')", "true")
         awaitPicker("(document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:' '})), selected.size === 1 && document.activeElement.dataset.muscleId === 'biceps-left')", "true")
         awaitPicker("(document.querySelector('[data-view=back]').click(), document.querySelectorAll('#body-map path').length)", "49")
         awaitPicker("(document.querySelector('[data-view=front]').click(), document.querySelector('[data-muscle-id=\"biceps-left\"]').getAttribute('aria-pressed'))", "\"true\"")

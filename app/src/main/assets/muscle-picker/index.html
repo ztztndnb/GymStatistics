@@ -15,6 +15,9 @@
     #hint { padding: 0 14px 8px; color: var(--muted); font-size: 13px; }
     #body-map { flex: 1; min-height: 180px; margin: 0 12px 12px; border-radius: 16px; background: var(--surface); padding: 12px 8px; overflow: hidden; touch-action: none; }
     #body-map svg { transform-origin: center center; touch-action: none; user-select: none; }
+    #body-map path { fill: var(--fill); stroke: var(--surface); stroke-width: .12; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+    #body-map path[aria-pressed="true"] { fill: var(--primary); }
+    #body-map path:focus-visible { stroke: var(--text); stroke-width: .2; }
     #selected { max-height: 90px; overflow: auto; padding: 8px 14px 12px; color: var(--muted); font-size: 14px; }
     #selected strong { color: var(--primary); }
     #error { padding: 0 14px 8px; color: #b3261e; font-size: 13px; }
@@ -123,7 +126,7 @@
       items.forEach(item => {
         if (item && MUSCLE_NAMES[item.id]) selected.add(item.id);
       });
-      render();
+      updateSelection();
     }
 
     function setPickerColors(colors) {
@@ -132,11 +135,17 @@
           document.documentElement.style.setProperty(`--${key}`, colors[key]);
         }
       });
-      render();
+    }
+
+    function updateSelection() {
+      map.querySelectorAll('path').forEach(path => {
+        path.setAttribute('aria-pressed', String(selected.has(path.dataset.muscleId)));
+      });
+      updateSelectedText();
+      notifySelection();
     }
 
     function render() {
-      const focusedId = document.activeElement?.getAttribute('data-muscle-id');
       const muscles = view === BodyMuscles.ViewSide.FRONT
         ? BodyMuscles.FRONT_MUSCLES
         : BodyMuscles.BACK_MUSCLES;
@@ -148,18 +157,13 @@
       muscles.forEach(muscle => {
         const path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', muscle.path);
-        path.setAttribute('fill', selected.has(muscle.id) ? 'var(--primary)' : 'var(--fill)');
-        path.setAttribute('stroke', 'var(--surface)');
         path.dataset.muscleId = muscle.id;
         path.setAttribute('role', 'button');
         path.setAttribute('tabindex', '0');
         path.setAttribute('aria-label', MUSCLE_NAMES[muscle.id]);
-        path.setAttribute('aria-pressed', String(selected.has(muscle.id)));
-        path.setAttribute('stroke-width', '0.12');
-        path.style.cursor = 'pointer';
         path.addEventListener('click', () => {
           selected.has(muscle.id) ? selected.delete(muscle.id) : selected.add(muscle.id);
-          render();
+          updateSelection();
         });
         path.addEventListener('keydown', event => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -170,10 +174,8 @@
         svg.appendChild(path);
       });
       map.replaceChildren(svg);
-      if (focusedId) map.querySelector(`[data-muscle-id="${focusedId}"]`)?.focus({ preventScroll: true });
       applyMapTransform();
-      updateSelectedText();
-      notifySelection();
+      updateSelection();
     }
 
     map.addEventListener('touchstart', event => {
@@ -227,7 +229,7 @@
     }));
     document.querySelector('[data-clear]').addEventListener('click', () => {
       selected.clear();
-      render();
+      updateSelection();
     });
     render();
   </script>
