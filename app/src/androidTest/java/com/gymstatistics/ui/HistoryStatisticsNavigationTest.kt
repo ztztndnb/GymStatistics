@@ -35,6 +35,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.gymstatistics.GymViewModel
 import com.gymstatistics.MainActivity
 import com.gymstatistics.data.ExerciseRecord
+import com.gymstatistics.data.MuscleSelection
 import com.gymstatistics.data.PlannedExercise
 import java.time.LocalDate
 import java.io.File
@@ -190,11 +191,16 @@ class HistoryStatisticsNavigationTest {
         }
     }
 
-    @Test fun homeAddSuggestsAtMostThreeNamesAndSelectionOnlyFillsTheName() {
+    @Test fun homeAddSuggestsAtMostThreeNamesAndFillsTheLatestRecord() {
+        val muscle = MuscleSelection("shoulder-side-left", "左侧三角肌中束")
         compose.runOnIdle {
             model.addSession(LocalDate.now().minusDays(7).toString(), "", (1..5).map {
                 ExerciseRecord("候选肩推$it", data = 50.0, unit = "kg")
             })
+            model.addSession(LocalDate.now().minusDays(2).toString(), "", listOf(
+                ExerciseRecord("候选肩推2", data = 42.5, unit = "lbs", count = 8, sets = 4,
+                    note = "最近一次的备注", muscles = listOf(muscle)),
+            ))
             model.clearMessage()
         }
         compose.onNodeWithText("记录动作").performClick()
@@ -215,8 +221,21 @@ class HistoryStatisticsNavigationTest {
         name.performTextReplacement("候选肩推2")
         compose.onNode(hasText("候选肩推2") and !hasSetTextAction()).performClick()
         name.assertTextContains("候选肩推2")
-        data.assertTextContains("25")
+        data.assertTextContains("42.5")
         assertTrue(compose.onAllNodes(suggestions).fetchSemanticsNodes().isEmpty())
+
+        data.performTextReplacement("45")
+        compose.onNodeWithText("保存").performClick()
+        compose.runOnIdle {
+            val saved = model.uiState.data.sessions.single { it.date == LocalDate.now().toString() }
+                .exercises.single { it.name == "候选肩推2" }
+            assertEquals(45.0, saved.data!!, 0.0)
+            assertEquals("lbs", saved.unit)
+            assertEquals(8, saved.count)
+            assertEquals(4, saved.sets)
+            assertEquals("最近一次的备注", saved.note)
+            assertEquals(listOf(muscle), saved.muscles)
+        }
     }
 
     @Test fun homeActionMenuOpensItsOwnLibraryDetail() {

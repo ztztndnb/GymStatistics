@@ -436,15 +436,12 @@ fun GymApp(viewModel: GymViewModel) {
                         )
                     }
                     if (showAdd) {
-                        val actionNames = if (editingExerciseId == null) {
-                            remember(state.data.sessions) { buildActions(state.data.sessions).map { it.name } }
-                        } else emptyList()
                         AddSessionDialog(
                             defaultDate = selectedDate,
                             initial = prefillExercise,
                             initialNote = prefillExercise?.note ?: "",
                             isEditing = editingExerciseId != null,
-                            actionNames = actionNames,
+                            sessions = state.data.sessions,
                             onDismiss = { showAdd = false; editingExerciseId = null; prefillExercise = null },
                             onConfirm = { date, note, exercise ->
                                 if (editingExerciseId != null) viewModel.updateExercise(date, editingExerciseId!!, exercise, note)
@@ -2051,13 +2048,14 @@ private fun AddSessionDialog(
     initial: ExerciseRecord?,
     initialNote: String,
     isEditing: Boolean,
-    actionNames: List<String>,
+    sessions: List<SessionRecord>,
     onDismiss: () -> Unit,
     onConfirm: (String, String, ExerciseRecord) -> Unit,
 ) {
     var note by remember(initialNote) { mutableStateOf(initialNote) }
     var showMuscleDemo by remember { mutableStateOf(false) }
-    val exercise = remember(initial?.id) { ExerciseDraft(initial) }
+    var exercise by remember(initial?.id) { mutableStateOf(ExerciseDraft(initial)) }
+    val actionNames = if (isEditing) emptyList() else remember(sessions) { buildActions(sessions).map { it.name } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2076,7 +2074,20 @@ private fun AddSessionDialog(
         },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                ExerciseEditor(draft = exercise, actionNames = actionNames, onChooseMuscles = { showMuscleDemo = true })
+                ExerciseEditor(
+                    draft = exercise,
+                    actionNames = actionNames,
+                    onPickAction = { name ->
+                        val latest = latestExerciseForName(sessions, name)
+                        if (latest != null) {
+                            exercise = ExerciseDraft(latest)
+                            note = latest.note
+                        } else {
+                            exercise.name = name
+                        }
+                    },
+                    onChooseMuscles = { showMuscleDemo = true },
+                )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = note,
@@ -2114,7 +2125,12 @@ private fun AddSessionDialog(
 }
 
 @Composable
-private fun ExerciseEditor(draft: ExerciseDraft, actionNames: List<String>, onChooseMuscles: () -> Unit) {
+private fun ExerciseEditor(
+    draft: ExerciseDraft,
+    actionNames: List<String>,
+    onPickAction: (String) -> Unit,
+    onChooseMuscles: () -> Unit,
+) {
     var nameFocused by remember { mutableStateOf(false) }
     var showSuggestions by remember { mutableStateOf(false) }
     val matches = remember(actionNames, draft.name, nameFocused) {
@@ -2144,7 +2160,7 @@ private fun ExerciseEditor(draft: ExerciseDraft, actionNames: List<String>, onCh
                 ) {
                     matches.forEach { name ->
                         DropdownMenuItem(text = { Text(name) }, onClick = {
-                            draft.name = name
+                            onPickAction(name)
                             showSuggestions = false
                         })
                     }
