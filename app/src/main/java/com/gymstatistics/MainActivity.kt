@@ -21,4 +21,15 @@ class MainActivity : ComponentActivity() {
             GymApp(viewModel)
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        WorkoutOverlay.hide()
+        WorkoutOverlay.checkPermission(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) WorkoutOverlay.show(applicationContext)
+    }
 }

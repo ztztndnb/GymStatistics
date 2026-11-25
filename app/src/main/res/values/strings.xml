@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GymStatistics</string>
+    <string name="workout_overlay_record">记录动作</string>
 </resources>

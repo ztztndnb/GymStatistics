@@ -1,5 +1,9 @@
 package com.gymstatistics.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -80,6 +84,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -156,6 +161,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONObject
 import com.gymstatistics.GymViewModel
+import com.gymstatistics.WorkoutOverlay
 import com.gymstatistics.data.ActionRecord
 import com.gymstatistics.data.ActionRecordSort
 import com.gymstatistics.data.ActionSummary
@@ -203,6 +209,7 @@ private const val MIN_FLING_VELOCITY = 1000f
 @Composable
 fun GymApp(viewModel: GymViewModel) {
     val state = viewModel.uiState
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var navigation by remember { mutableStateOf(AppNavigationState()) }
     var bodyEntryDate by remember { mutableStateOf(LocalDate.now()) }
@@ -224,6 +231,26 @@ fun GymApp(viewModel: GymViewModel) {
     var isSettling by remember { mutableStateOf(false) }
     val settleOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val overlayPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (Settings.canDrawOverlays(context)) {
+            WorkoutOverlay.start()
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("授予悬浮窗权限后才能开始训练") }
+        }
+    }
+    val openRecord = {
+        editingExerciseId = null
+        prefillExercise = null
+        showAdd = true
+    }
+    LaunchedEffect(WorkoutOverlay.recordRequested, state.loaded) {
+        if (WorkoutOverlay.recordRequested && state.loaded) {
+            navigation = navigation.selectTab(MainTab.HOME)
+            showCalendar = false
+            if (!showAdd) openRecord()
+            WorkoutOverlay.recordOpened()
+        }
+    }
 
     GymDesignTheme(enabled = screen in setOf(Screen.MAIN, Screen.PLAN, Screen.BODY, Screen.BODY_EDITOR, Screen.STATS, Screen.HISTORY, Screen.NUTRITION)) {
     Scaffold(
@@ -414,11 +441,37 @@ fun GymApp(viewModel: GymViewModel) {
                                     )
                                 }
                             }
-                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FilterChip(
+                                    selected = WorkoutOverlay.isTraining,
+                                    onClick = {
+                                        if (WorkoutOverlay.isTraining) {
+                                            WorkoutOverlay.stop()
+                                        } else if (Settings.canDrawOverlays(context)) {
+                                            WorkoutOverlay.start()
+                                        } else {
+                                            val permissionIntent = Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                Uri.parse("package:${context.packageName}"),
+                                            )
+                                            try {
+                                                overlayPermission.launch(permissionIntent)
+                                            } catch (_: ActivityNotFoundException) {
+                                                scope.launch { snackbarHostState.showSnackbar("请在系统设置中允许悬浮窗权限") }
+                                            }
+                                        }
+                                    },
+                                    label = { Text("开始训练") },
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                )
                                 Button(
                                     shape = RoundedCornerShape(14.dp),
-                                    onClick = { editingExerciseId = null; prefillExercise = null; showAdd = true },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    onClick = openRecord,
+                                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                                 ) {
                                     Icon(Icons.Filled.Add, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
