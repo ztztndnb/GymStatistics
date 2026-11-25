@@ -11,19 +11,21 @@ class AppNavigationTest {
     fun bodyEditorHidesNavigationAndReturnsToTheBodyDashboard() {
         val editorScreen = Screen.entries.find { it.name == "BODY_EDITOR" }
         assertTrue("Body recording needs an independent editor destination", editorScreen != null)
-        val editor = AppNavigationState().selectTab(MainTab.BODY).open(editorScreen!!)
+        val editor = AppNavigationState().open(Screen.BODY).open(editorScreen!!)
         assertFalse(editor.showBottomNavigation)
-        assertEquals(MainTab.BODY, editor.selectedTab)
+        assertEquals(MainTab.STATS, editor.selectedTab)
         assertEquals(Screen.BODY, editor.back().screen)
         assertTrue(editor.back().showBottomNavigation)
     }
 
     @Test
-    fun bodyRecordsAreASelectableBottomNavigationPage() {
-        val body = AppNavigationState().open(Screen.BODY)
+    fun bodyRecordsBelongToStatisticsAndReturnThere() {
+        val statistics = AppNavigationState().selectHistoryAction("卧推").open(Screen.STATS)
+        val body = statistics.open(Screen.BODY)
         assertTrue(body.showBottomNavigation)
-        assertEquals("身体", body.selectedTab.label)
-        assertEquals(AppNavigationState(), body.back())
+        assertEquals(MainTab.STATS, body.selectedTab)
+        assertEquals(statistics, body.back())
+        assertEquals(statistics, body.open(Screen.BODY_EDITOR).back().back())
     }
 
     @Test
@@ -55,11 +57,10 @@ class AppNavigationTest {
     }
 
     @Test
-    fun allFiveTabsOpenTheirPageAndRemainSelectable() {
+    fun allFourTabsOpenTheirPageAndRemainSelectable() {
         val cases = listOf(
             MainTab.HOME to Screen.MAIN,
             MainTab.PLAN to Screen.PLAN,
-            MainTab.BODY to Screen.BODY,
             MainTab.STATS to Screen.STATS,
             MainTab.LIBRARY to Screen.HISTORY,
         )
@@ -126,7 +127,7 @@ class AppNavigationTest {
 
     @Test
     fun backFromAnotherRootTabReturnsHome() {
-        listOf(MainTab.PLAN, MainTab.BODY, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
+        listOf(MainTab.PLAN, MainTab.STATS, MainTab.LIBRARY).forEach { tab ->
             assertEquals(AppNavigationState(), AppNavigationState().selectTab(tab).back())
         }
     }

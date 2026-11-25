@@ -116,7 +116,7 @@ class StatisticsWebViewTest {
             ExerciseRecord("测试卧推", sets = 7, muscles = listOf(MuscleSelection("chest-upper-left", "左上胸"))),
         ))))
         // A shorter viewport keeps the third lazy item off-screen initially.
-        instrumentation.runOnMainSync { activity.setContent { MaterialTheme { Box(Modifier.height(600.dp)) { StatisticsScreen(data, {}, {}) } } } }
+        instrumentation.runOnMainSync { activity.setContent { MaterialTheme { Box(Modifier.height(600.dp)) { StatisticsScreen(data, {}, {}, onOpenBody = {}) } } } }
         // Replacing the host content is asynchronous. Wait for its new semantics
         // owner before requesting a scroll (and before failure-tree diagnostics).
         compose.waitForIdle()

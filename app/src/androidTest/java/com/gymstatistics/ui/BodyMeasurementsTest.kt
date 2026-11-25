@@ -65,8 +65,9 @@ class BodyMeasurementsTest {
         if (::directory.isInitialized) check(directory.deleteRecursively())
     }
 
-    @Test fun bodyTabShowsStatisticsAndOpensASeparateEditor() {
-        compose.onNodeWithText("身体").performClick()
+    @Test fun statisticsOpensBodyDashboardAndItsSeparateEditor() {
+        compose.onNodeWithText("身体").assertDoesNotExist()
+        openBodyDashboard()
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("身体变化").assertIsDisplayed()
         compose.onNodeWithTag("body-editor").assertDoesNotExist()
@@ -78,11 +79,13 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
-        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithText("统计").assertIsSelected()
         compose.onNodeWithText("最新 65.5 kg（${LocalDate.now()}）").assertIsDisplayed()
         val restored = runBlocking { WorkoutRepository(fixtureApp).load() }
         Assert.assertEquals(LocalDate.now().toString(), restored.bodyData!!.records.single().date)
         Assert.assertEquals(65.5, restored.bodyData!!.records.single().values["weight"]!!, 0.0)
+        compose.onNodeWithContentDescription("返回统计").performClick()
+        compose.onNodeWithText("训练概览").assertIsDisplayed()
         compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("编辑身体数据").assertIsDisplayed()
     }
@@ -99,7 +102,7 @@ class BodyMeasurementsTest {
             ).forEach { (date, values) -> model.saveBodyRecord(date.toString(), values) {} }
         }
         awaitWrites()
-        compose.onNodeWithText("身体").performClick()
+        openBodyDashboard()
         compose.onNodeWithContentDescription("2个测量日，最低65.5，最高66 kg").assertExists()
         listOf("66", "65.83", "65.67", "65.5").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
         compose.onNodeWithText("近90天").performClick()
@@ -118,7 +121,7 @@ class BodyMeasurementsTest {
         val today = LocalDate.now().toString()
         compose.runOnIdle { model.saveBodyRecord(today, mapOf("weight" to 66.0, "waist" to 80.0)) {} }
         awaitWrites()
-        compose.onNodeWithText("身体").performClick()
+        openBodyDashboard()
         val historyCard = hasText(today) and hasClickAction()
         compose.onNodeWithTag("body-dashboard").performScrollToNode(historyCard)
         compose.onNode(historyCard).performClick()
@@ -137,7 +140,7 @@ class BodyMeasurementsTest {
     }
 
     @Test fun unsavedEditorCanContinueOrDiscardWithoutWriting() {
-        compose.onNodeWithText("身体").performClick()
+        openBodyDashboard()
         compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
         Espresso.closeSoftKeyboard()
@@ -177,12 +180,12 @@ class BodyMeasurementsTest {
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
         compose.onNodeWithText("首页").performClick()
         compose.onNodeWithText("${target.year}年${target.monthValue}月${target.dayOfMonth}日").assertIsDisplayed()
-        compose.onNodeWithText("身体").performClick()
+        openBodyDashboard()
         compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText(today.toString()).assertIsDisplayed()
     }
 
-    @Test fun openingBodyTabDuringInitialLoadKeepsExistingMeasurements() {
+    @Test fun openingBodyDashboardDuringInitialLoadKeepsExistingMeasurements() {
         val today = LocalDate.now().toString()
         val saved = WorkoutData(bodyData = saveBodyDay(BodyData(), today, mapOf("weight" to 65.5, "waist" to 80.0)))
         File(directory, "workouts.json").writeText(AppJson.json.encodeToString(WorkoutData.serializer(), saved), Charsets.UTF_8)
@@ -202,7 +205,7 @@ class BodyMeasurementsTest {
                 model = ViewModelProvider(store, ViewModelProvider.AndroidViewModelFactory(fixtureApp))[GymViewModel::class.java]
                 activity.setContent { GymApp(model) }
             }
-            compose.onNodeWithText("身体").performClick()
+            openBodyDashboard()
             compose.waitForIdle()
             Assert.assertFalse(model.uiState.loaded)
         } finally { releaseLoad.countDown() }
@@ -432,6 +435,11 @@ class BodyMeasurementsTest {
         } finally { server.stop() }
     }
 
+    private fun openBodyDashboard() {
+        compose.onNodeWithText("统计").performClick()
+        compose.onNodeWithText("身体数据").performClick()
+    }
+
     private fun save() {
         Espresso.closeSoftKeyboard()
         compose.waitForIdle()
@@ -439,7 +447,7 @@ class BodyMeasurementsTest {
         compose.onNodeWithText("保存身体数据").performClick()
         awaitWrites()
         compose.onNodeWithTag("body-dashboard").assertIsDisplayed()
-        compose.onNodeWithText("身体").assertIsSelected()
+        compose.onNodeWithText("统计").assertIsSelected()
         compose.onNodeWithText("首页").performClick()
         try {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("编辑身体数据").fetchSemanticsNodes().isNotEmpty() }

@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +66,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -75,7 +78,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.FitnessCenter
-import androidx.compose.material.icons.rounded.MonitorWeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -84,7 +86,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -149,6 +150,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.PopupProperties
@@ -235,7 +237,7 @@ fun GymApp(viewModel: GymViewModel) {
         if (Settings.canDrawOverlays(context)) {
             WorkoutOverlay.start()
         } else {
-            scope.launch { snackbarHostState.showSnackbar("授予悬浮窗权限后才能开始训练") }
+            Toast.makeText(context, "授予悬浮窗权限后才能开始训练", Toast.LENGTH_SHORT).show()
         }
     }
     val openRecord = {
@@ -258,13 +260,24 @@ fun GymApp(viewModel: GymViewModel) {
             if (navigation.showBottomNavigation) {
                 MainBottomNavigation(
                     selectedTab = navigation.selectedTab,
-                    enabled = true,
-                    onSelect = {
-                        if (it == MainTab.BODY && navigation.screen != Screen.BODY) {
-                            bodyEntryDate = LocalDate.now()
-                            bodyEntryKey++
+                    isTraining = WorkoutOverlay.isTraining,
+                    onSelect = { navigation = navigation.selectTab(it) },
+                    onToggleTraining = {
+                        if (WorkoutOverlay.isTraining) {
+                            WorkoutOverlay.stop()
+                        } else if (Settings.canDrawOverlays(context)) {
+                            WorkoutOverlay.start()
+                        } else {
+                            val permissionIntent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}"),
+                            )
+                            try {
+                                overlayPermission.launch(permissionIntent)
+                            } catch (_: ActivityNotFoundException) {
+                                Toast.makeText(context, "请在系统设置中允许悬浮窗权限", Toast.LENGTH_SHORT).show()
+                            }
                         }
-                        navigation = navigation.selectTab(it)
                     },
                 )
             }
@@ -441,37 +454,11 @@ fun GymApp(viewModel: GymViewModel) {
                                     )
                                 }
                             }
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                FilterChip(
-                                    selected = WorkoutOverlay.isTraining,
-                                    onClick = {
-                                        if (WorkoutOverlay.isTraining) {
-                                            WorkoutOverlay.stop()
-                                        } else if (Settings.canDrawOverlays(context)) {
-                                            WorkoutOverlay.start()
-                                        } else {
-                                            val permissionIntent = Intent(
-                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                                Uri.parse("package:${context.packageName}"),
-                                            )
-                                            try {
-                                                overlayPermission.launch(permissionIntent)
-                                            } catch (_: ActivityNotFoundException) {
-                                                scope.launch { snackbarHostState.showSnackbar("请在系统设置中允许悬浮窗权限") }
-                                            }
-                                        }
-                                    },
-                                    label = { Text("开始训练") },
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                )
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                                 Button(
                                     shape = RoundedCornerShape(14.dp),
                                     onClick = openRecord,
-                                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                 ) {
                                     Icon(Icons.Filled.Add, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
@@ -531,6 +518,7 @@ fun GymApp(viewModel: GymViewModel) {
                         navigation = navigation.selectTab(MainTab.HOME)
                     },
                     onBack = { navigation = navigation.back() },
+                    onOpenBody = { navigation = navigation.open(Screen.BODY) },
                 )
 
                 Screen.HISTORY -> HistoryScreen(
@@ -618,30 +606,60 @@ fun GymApp(viewModel: GymViewModel) {
 }
 
 @Composable
-private fun MainBottomNavigation(selectedTab: MainTab, enabled: Boolean, onSelect: (MainTab) -> Unit) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
-        MainTab.entries.forEach { tab ->
-            NavigationBarItem(
-                colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent, selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary),
-                selected = selectedTab == tab,
-                enabled = enabled,
-                onClick = { onSelect(tab) },
-                icon = {
-                    Icon(
-                        imageVector = when (tab) {
-                            MainTab.HOME -> Icons.Rounded.Home
-                            MainTab.PLAN -> Icons.Rounded.CalendarMonth
-                            MainTab.BODY -> Icons.Rounded.MonitorWeight
-                            MainTab.STATS -> Icons.Rounded.BarChart
-                            MainTab.LIBRARY -> Icons.Rounded.FitnessCenter
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                    )
-                },
-                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
-                alwaysShowLabel = true,
-            )
+private fun MainBottomNavigation(
+    selectedTab: MainTab,
+    isTraining: Boolean,
+    onSelect: (MainTab) -> Unit,
+    onToggleTraining: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Box {
+        NavigationBar(
+            modifier = Modifier.padding(top = 12.dp),
+            containerColor = colors.surface,
+            tonalElevation = 0.dp,
+        ) {
+            MainTab.entries.forEach { tab ->
+                if (tab == MainTab.STATS) Spacer(Modifier.weight(1f))
+                NavigationBarItem(
+                    colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent, selectedIconColor = colors.primary, selectedTextColor = colors.primary),
+                    selected = selectedTab == tab,
+                    onClick = { onSelect(tab) },
+                    icon = {
+                        Icon(
+                            imageVector = when (tab) {
+                                MainTab.HOME -> Icons.Rounded.Home
+                                MainTab.PLAN -> Icons.Rounded.CalendarMonth
+                                MainTab.STATS -> Icons.Rounded.BarChart
+                                MainTab.LIBRARY -> Icons.Rounded.FitnessCenter
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    },
+                    label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                    alwaysShowLabel = true,
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.align(Alignment.TopCenter)
+                .clickable(role = Role.Button, onClick = onToggleTraining),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
+                color = if (isTraining) colors.primaryContainer else colors.primary,
+                contentColor = if (isTraining) colors.onPrimaryContainer else colors.onPrimary,
+                shadowElevation = 6.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(if (isTraining) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null)
+                }
+            }
+            Text(if (isTraining) "结束" else "开始", style = MaterialTheme.typography.labelSmall, color = colors.primary)
         }
     }
 }

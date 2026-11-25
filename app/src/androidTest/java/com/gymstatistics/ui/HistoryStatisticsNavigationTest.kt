@@ -301,7 +301,7 @@ class HistoryStatisticsNavigationTest {
         compose.onNodeWithText("统计").performClick()
         compose.onNodeWithText("训练概览").assertIsDisplayed()
         screenshot("ui-statistics")
-        compose.onNodeWithText("身体").performClick()
+        compose.onNodeWithText("身体数据").performClick()
         compose.onNodeWithText("添加记录").performClick()
         compose.onNodeWithText("体重 (kg)").performTextReplacement("65.5")
         androidx.test.espresso.Espresso.closeSoftKeyboard()

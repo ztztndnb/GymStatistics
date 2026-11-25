@@ -56,6 +56,7 @@ internal fun StatisticsScreen(
     data: WorkoutData,
     onOpenDate: (LocalDate) -> Unit,
     onBack: () -> Unit,
+    onOpenBody: () -> Unit,
     requestedAction: String? = null,
 ) {
     BackHandler(onBack = onBack)
@@ -70,7 +71,12 @@ internal fun StatisticsScreen(
     LaunchedEffect(requestedAction) {
         if (requestedAction != null) listState.scrollToItem(4)
     }
-    Scaffold(topBar = { TopAppBar(title = { Text("统计", fontWeight = FontWeight.SemiBold) }) }) { padding ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("统计", fontWeight = FontWeight.SemiBold) },
+            actions = { TextButton(onClick = onOpenBody) { Text("身体数据") } },
+        )
+    }) { padding ->
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),

@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ChevronRight
@@ -34,6 +35,11 @@ internal fun BodyMeasurementsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { TopAppBar(
             title = { Text("身体数据") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回统计")
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surface),
             actions = { IconButton(onClick = { showMetrics = true }) { Icon(Icons.Default.Settings, "管理身体指标") } },
         ) },
