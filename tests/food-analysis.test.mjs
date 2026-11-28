@@ -327,11 +327,11 @@ test("settings shows API key save and error messages", () => {
   assert.match(settingsPage, /snackbarHost = \{ SnackbarHost\(snackbarHostState\) \}/);
 });
 
-test("release metadata is 1.5.2 with the requested APK name", () => {
+test("release metadata is 1.5.3 with the requested APK name", () => {
   const buildSource = source("app/build.gradle.kts");
-  assert.match(buildSource, /versionCode = 76/);
-  assert.match(buildSource, /versionName = "1\.5\.2"/);
+  assert.match(buildSource, /versionCode = 77/);
+  assert.match(buildSource, /versionName = "1\.5\.3"/);
   assert.match(buildSource, /register\("copyReleaseApkWithVersion"\)/);
   assert.match(buildSource, /source\.copyTo\(target, overwrite = true\)/);
-  assert.match(readmeSource, /GymStatistics 1\.5\.2\.apk/);
+  assert.match(readmeSource, /GymStatistics 1\.5\.3\.apk/);
 });

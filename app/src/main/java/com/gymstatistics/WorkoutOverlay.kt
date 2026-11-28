@@ -2,9 +2,12 @@ package com.gymstatistics
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.provider.Settings
@@ -13,7 +16,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
-import android.widget.Button
+import android.widget.ImageButton
+import android.widget.ImageView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,7 +30,7 @@ internal object WorkoutOverlay {
     var recordRequested by mutableStateOf(false)
         private set
 
-    private var window: Pair<WindowManager, Button>? = null
+    private var window: Pair<WindowManager, ImageButton>? = null
     private var lastPosition: Point? = null
 
     fun start() {
@@ -59,8 +63,19 @@ internal object WorkoutOverlay {
             context
         }
         val manager = windowContext.getSystemService(WindowManager::class.java) ?: return
-        val button = Button(windowContext).apply {
-            setText(R.string.workout_overlay_record)
+        val button = ImageButton(windowContext).apply {
+            contentDescription = resources.getText(R.string.workout_overlay_record)
+            setImageResource(R.drawable.ic_workout_overlay_add)
+            scaleType = ImageView.ScaleType.CENTER
+            setPadding(0, 0, 0, 0)
+            background = RippleDrawable(
+                ColorStateList.valueOf(0x38FFFFFF),
+                GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0xFF7553AA.toInt())
+                },
+                null,
+            )
             setOnClickListener {
                 val launch = Intent(context, MainActivity::class.java).addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
@@ -70,9 +85,10 @@ internal object WorkoutOverlay {
             }
         }
         val density = windowContext.resources.displayMetrics.density
+        val diameter = (56 * density).roundToInt()
         val layout = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            diameter,
+            diameter,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
@@ -93,7 +109,7 @@ internal object WorkoutOverlay {
         }
     }
 
-    private fun enableDragging(button: Button, manager: WindowManager, layout: WindowManager.LayoutParams) {
+    private fun enableDragging(button: ImageButton, manager: WindowManager, layout: WindowManager.LayoutParams) {
         val touchSlop = ViewConfiguration.get(button.context).scaledTouchSlop
         val screen = Rect()
         val location = IntArray(2)
