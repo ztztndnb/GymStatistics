@@ -644,7 +644,12 @@ private fun MainBottomNavigation(
         }
         Column(
             modifier = Modifier.align(Alignment.TopCenter)
-                .clickable(role = Role.Button, onClick = onToggleTraining),
+                .clickable(
+                    interactionSource = null,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onToggleTraining,
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
