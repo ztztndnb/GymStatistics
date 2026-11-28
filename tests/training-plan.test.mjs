@@ -146,7 +146,7 @@ test("LAN sync includes plan data and keeps date imports session-scoped", () => 
 });
 
 test("release metadata and README are bumped for the current release", () => {
-  assert.match(buildSource, /versionCode = 75/);
-  assert.match(buildSource, /versionName = "1\.5\.1"/);
-  assert.match(readmeSource, /GymStatistics 1\.5\.1\.apk/);
+  assert.match(buildSource, /versionCode = 76/);
+  assert.match(buildSource, /versionName = "1\.5\.2"/);
+  assert.match(readmeSource, /GymStatistics 1\.5\.2\.apk/);
 });
