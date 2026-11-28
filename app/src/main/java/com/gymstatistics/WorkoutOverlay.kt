@@ -2,9 +2,9 @@ package com.gymstatistics
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.PixelFormat
-import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
@@ -25,13 +25,16 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 internal object WorkoutOverlay {
+    private const val POSITION_PREFS = "workout_overlay_position"
+    private const val RIGHT_OFFSET = "right_offset_dp"
+    private const val BOTTOM_OFFSET = "bottom_offset_dp"
+
     var isTraining by mutableStateOf(false)
         private set
     var recordRequested by mutableStateOf(false)
         private set
 
     private var window: Pair<WindowManager, ImageButton>? = null
-    private var lastPosition: Point? = null
 
     fun start() {
         isTraining = true
@@ -86,6 +89,7 @@ internal object WorkoutOverlay {
         }
         val density = windowContext.resources.displayMetrics.density
         val diameter = (56 * density).roundToInt()
+        val position = context.getSharedPreferences(POSITION_PREFS, Context.MODE_PRIVATE)
         val layout = WindowManager.LayoutParams(
             diameter,
             diameter,
@@ -94,11 +98,11 @@ internal object WorkoutOverlay {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.RIGHT or Gravity.BOTTOM
-            x = lastPosition?.x ?: (16 * density).roundToInt()
-            y = lastPosition?.y ?: (112 * density).roundToInt()
+            x = (position.getFloat(RIGHT_OFFSET, 16f) * density).roundToInt()
+            y = (position.getFloat(BOTTOM_OFFSET, 112f) * density).roundToInt()
             setTitle("GymStatisticsWorkoutOverlay")
         }
-        enableDragging(button, manager, layout)
+        enableDragging(button, manager, layout, position)
         try {
             manager.addView(button, layout)
             window = manager to button
@@ -109,8 +113,14 @@ internal object WorkoutOverlay {
         }
     }
 
-    private fun enableDragging(button: ImageButton, manager: WindowManager, layout: WindowManager.LayoutParams) {
+    private fun enableDragging(
+        button: ImageButton,
+        manager: WindowManager,
+        layout: WindowManager.LayoutParams,
+        position: SharedPreferences,
+    ) {
         val touchSlop = ViewConfiguration.get(button.context).scaledTouchSlop
+        val density = button.resources.displayMetrics.density
         val screen = Rect()
         val location = IntArray(2)
         var downX = 0f
@@ -142,16 +152,18 @@ internal object WorkoutOverlay {
                         layout.x = (initialRight - dx).roundToInt().coerceIn(0, (screen.width() - view.width).coerceAtLeast(0))
                         layout.y = (initialBottom - dy).roundToInt().coerceIn(0, (screen.height() - view.height).coerceAtLeast(0))
                         manager.updateViewLayout(view, layout)
-                        lastPosition = Point(layout.x, layout.y)
                     }
                 }
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
                     view.isPressed = false
-                    if (tracking && !dragging) view.performClick()
-                    tracking = false
-                }
-                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
-                    view.isPressed = false
+                    if (tracking && dragging) {
+                        position.edit()
+                            .putFloat(RIGHT_OFFSET, layout.x / density)
+                            .putFloat(BOTTOM_OFFSET, layout.y / density)
+                            .apply()
+                    } else if (tracking && event.actionMasked == MotionEvent.ACTION_UP) {
+                        view.performClick()
+                    }
                     tracking = false
                 }
             }
